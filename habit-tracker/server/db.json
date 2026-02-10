@@ -1,0 +1,25 @@
+{
+  "users": [
+    {
+      "id": 1770131031084,
+      "email": "admin@gmail.com",
+      "password": "$2b$08$vBGLO1zga6e488IejuPVDOHH2PEYzCNRGdkFc50YKgNntBODc8UdC",
+      "role": "admin"
+    },
+    {
+      "id": 1770132953813,
+      "email": "rivanv2008@gmail.com",
+      "password": "$2b$08$FkfbLfGkVe0ogY/g138BkuRpk0Sqasy8Q.pANZklsAhyJ8./2Ie8S",
+      "role": "user"
+    }
+  ],
+  "habits": [
+    {
+      "id": 1770745734447,
+      "title": "rdsy",
+      "date": "2026-02-10",
+      "time": "19:50",
+      "userId": 1770132953813
+    }
+  ]
+}
