@@ -13,7 +13,7 @@ const __dirname = path.dirname(__filename);
 const DB_PATH = path.join(__dirname, "db.json");
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 const SECRET = "secret123";
 
 app.use(cors());
@@ -148,6 +148,6 @@ app.delete("/api/habits/:id", auth, (req, res) => {
 
 /* ================= START ================= */
 
-app.listen(PORT, () =>
-  console.log(`✅ Server running http://localhost:${PORT}`)
-);
+app.listen(PORT, () => {
+  console.log("Server running on port", PORT);
+});
