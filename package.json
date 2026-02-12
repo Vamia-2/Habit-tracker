@@ -1,0 +1,9 @@
+{
+  "name": "habit-tracker-fullstack",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "build": "cd client && npm install && npm run build",
+    "start": "node server/index.js"
+  }
+}
