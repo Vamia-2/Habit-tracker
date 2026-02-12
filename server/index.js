@@ -109,6 +109,9 @@ app.get("/api/habits/my", auth, (req, res) => {
   const db = readDB();
   res.json(db.habits.filter(h => h.userId === req.user.id));
 });
+app.get("/", (req, res) => {
+  res.send("🚀 Habit Tracker API is running");
+});
 
 /* 👑 ALL HABITS (ADMIN) */
 app.get("/api/habits/all", auth, (req, res) => {

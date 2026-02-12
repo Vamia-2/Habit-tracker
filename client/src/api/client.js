@@ -1,4 +1,4 @@
-const API_URL = "http://localhost:3000/api";
+const API_URL = "https://habit-tracker-9ieh.onrender.com";
 
 export async function apiRequest(url, method = "GET", data) {
   const token = localStorage.getItem("token");
