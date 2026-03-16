@@ -5,7 +5,7 @@ import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import User from "./models/User.js";
-import Habit from "./models/Habit.js";
+import Habit from "./models/Habits.js";
 import auth from "./middleware/auth.js";
 
 dotenv.config();
