@@ -7,6 +7,11 @@ import jwt from "jsonwebtoken";
 import User from "./models/User.js";
 import Habit from "./models/Habits.js";
 import auth from "./middleware/auth.js";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 dotenv.config();
 
@@ -14,6 +19,7 @@ const app = express();
 
 app.use(cors());
 app.use(express.json());
+app.use(express.static(path.join(__dirname, "public")));
 
 /* ================= DATABASE ================= */
 
@@ -157,6 +163,12 @@ app.get("/api/admin/habits", auth, async (req, res) => {
 
   res.json(habits);
 
+});
+
+/* ================= PUBLIC ================= */
+
+app.get("*", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
 /* ================= START ================= */
