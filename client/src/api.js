@@ -1,4 +1,4 @@
-export const API = "http://localhost:5000/api";
+export const API = "https://habit-tracker-5xu3.onrender.com";
 
 export async function apiRequest(url, method = "GET", body) {
 

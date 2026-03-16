@@ -4,10 +4,9 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "lint": "eslint .",
-    "preview": "vite preview"
+    "build": "npm install",
+    "dev": "nodemon index.js",
+    "start": "node index.js"
   },
   "dependencies": {
     "chart.js": "^4.5.1",
