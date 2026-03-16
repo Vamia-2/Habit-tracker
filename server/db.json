@@ -7,19 +7,27 @@
       "role": "admin"
     },
     {
-      "id": 1770132953813,
+      "id": 1772638065106,
       "email": "rivanv2008@gmail.com",
-      "password": "$2b$08$FkfbLfGkVe0ogY/g138BkuRpk0Sqasy8Q.pANZklsAhyJ8./2Ie8S",
+      "password": "$2b$08$rlucTafqRykWI0MZM9b.lu1z9sn.vCFBKdg7uEOLjZ5Q3pi/KStwK",
       "role": "user"
     }
   ],
   "habits": [
     {
-      "id": 1770745734447,
-      "title": "rdsy",
-      "date": "2026-02-10",
-      "time": "19:50",
-      "userId": 1770132953813
+      "id": 1772638088803,
+      "title": "run",
+      "date": "2026-03-17",
+      "time": "20:56",
+      "userId": 1772638065106
+    },
+    {
+      "id": 1772650274956,
+      "title": "water",
+      "date": "2026-03-05",
+      "time": "15:23",
+      "reminder": true,
+      "userId": 1770131031084
     }
   ]
 }
