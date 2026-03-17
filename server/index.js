@@ -1,145 +1,180 @@
-import express from "express"
-import mongoose from "mongoose"
-import cors from "cors"
-import path from "path"
-import { fileURLToPath } from "url"
-import dotenv from "dotenv"
+import express from "express";
+import cors from "cors";
+import dotenv from "dotenv";
+import mongoose from "mongoose";
+import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
+import User from "./models/User.js";
+import Habit from "./models/Habit.js";
+import auth from "./middleware/auth.js";
+import path from "path";
+import { fileURLToPath } from "url";
 
-import User from "./models/User.js"
-import Habit from "./models/Habit.js"
-import auth from "./middleware/auth.js"
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
-dotenv.config()
+dotenv.config();
 
-const app = express()
+const app = express();
 
-app.use(cors())
-app.use(express.json())
+app.use(cors());
+app.use(express.json());
+app.use(express.static(path.join(__dirname, "public")));
 
-// MongoDB connection
+/* ================= DATABASE ================= */
+
 mongoose.connect(process.env.MONGO_URI)
-.then(()=>console.log("MongoDB connected"))
-.catch(err=>console.log(err))
+.then(() => console.log("MongoDB connected"))
+.catch(err => console.log(err));
 
-// paths
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = path.dirname(__filename)
+app.listen(5000, () => {
+  console.log("Server running on port 5000");
+});
 
-// serve React build
-app.use(express.static(path.join(__dirname,"public")))
+/* ================= AUTH ================= */
 
+app.post("/api/auth/register", async (req, res) => {
 
-// ---------------- AUTH ----------------
+  const { email, password } = req.body;
 
-// register
-app.post("/api/register", async(req,res)=>{
+  const exist = await User.findOne({ email });
 
-try{
+  if (exist)
+    return res.status(400).json({ message: "User exists" });
 
-const user = new User(req.body)
+  const hash = bcrypt.hashSync(password, 8);
 
-await user.save()
+  const user = new User({
+    email,
+    password: hash
+  });
 
-res.json(user)
+  await user.save();
 
-}catch(err){
+  res.json({ message: "Registered" });
 
-res.status(500).json(err)
-
-}
-
-})
-
-
-// login
-app.post("/api/login", async(req,res)=>{
-
-try{
-
-const user = await User.findOne({email:req.body.email})
-
-if(!user){
-return res.status(404).json({message:"User not found"})
-}
-
-res.json(user)
-
-}catch(err){
-
-res.status(500).json(err)
-
-}
-
-})
+});
 
 
+app.post("/api/auth/login", async (req, res) => {
 
-// ---------------- HABITS ----------------
+  const { email, password } = req.body;
 
-// get habits
-app.get("/api/habits",auth,async(req,res)=>{
+  const user = await User.findOne({ email });
 
-const habits = await Habit.find({user:req.user.id})
+  if (!user)
+    return res.status(401).json({ message: "Invalid credentials" });
 
-res.json(habits)
+  const valid = bcrypt.compareSync(password, user.password);
 
-})
+  if (!valid)
+    return res.status(401).json({ message: "Invalid credentials" });
 
+  const token = jwt.sign(
+    { id: user._id, role: user.role },
+    process.env.JWT_SECRET
+  );
 
-// create habit
-app.post("/api/habits",auth,async(req,res)=>{
+  res.json({
+    token,
+    user: {
+      email: user.email,
+      role: user.role
+    }
+  });
 
-const habit = new Habit({
+});
 
-title:req.body.title,
-user:req.user.id
+/* ================= HABITS ================= */
 
-})
+app.post("/api/habits", auth, async (req, res) => {
 
-await habit.save()
+  const habit = new Habit({
+    title: req.body.title,
+    userId: req.user.id
+  });
 
-res.json(habit)
+  await habit.save();
 
-})
+  res.json(habit);
 
-
-// update habit
-app.put("/api/habits/:id",auth,async(req,res)=>{
-
-const habit = await Habit.findByIdAndUpdate(
-req.params.id,
-req.body,
-{new:true}
-)
-
-res.json(habit)
-
-})
-
-
-// delete habit
-app.delete("/api/habits/:id",auth,async(req,res)=>{
-
-await Habit.findByIdAndDelete(req.params.id)
-
-res.json({message:"deleted"})
-
-})
+});
 
 
-// React fallback
-app.get("*",(req,res)=>{
+app.get("/api/habits", auth, async (req, res) => {
 
-res.sendFile(path.join(__dirname,"public","index.html"))
+  const habits = await Habit.find({
+    userId: req.user.id
+  });
 
-})
+  res.json(habits);
+
+});
 
 
-// start server
-const PORT = process.env.PORT || 5000
+app.put("/api/habits/:id", auth, async (req, res) => {
 
-app.listen(PORT,()=>{
+  const habit = await Habit.findById(req.params.id);
 
-console.log("Server running on port",PORT)
+  if (!habit)
+    return res.sendStatus(404);
 
-})
+  habit.completed = !habit.completed;
+
+  await habit.save();
+
+  res.json(habit);
+
+});
+
+
+app.delete("/api/habits/:id", auth, async (req, res) => {
+
+  await Habit.findByIdAndDelete(req.params.id);
+
+  res.json({ message: "Deleted" });
+
+});
+
+/* ================= ANALYTICS ================= */
+
+app.get("/api/stats", auth, async (req, res) => {
+
+  const habits = await Habit.find({ userId: req.user.id });
+
+  const completed = habits.filter(h => h.completed).length;
+
+  res.json({
+    total: habits.length,
+    completed,
+    notCompleted: habits.length - completed
+  });
+
+});
+
+/* ================= ADMIN ================= */
+
+app.get("/api/admin/habits", auth, async (req, res) => {
+
+  if (req.user.role !== "admin")
+    return res.status(403).json({ message: "Forbidden" });
+
+  const habits = await Habit.find().populate("userId");
+
+  res.json(habits);
+
+});
+
+/* ================= PUBLIC ================= */
+
+app.get("*", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+});
+
+/* ================= START ================= */
+
+const PORT = process.env.PORT || 5000;
+
+app.listen(PORT, () => {
+  console.log("Server running on port", PORT);
+});
