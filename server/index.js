@@ -27,9 +27,7 @@ mongoose.connect(process.env.MONGO_URI)
 .then(() => console.log("MongoDB connected"))
 .catch(err => console.log(err));
 
-app.listen(5000, () => {
-  console.log("Server running on port 5000");
-});
+
 
 /* ================= AUTH ================= */
 
@@ -167,7 +165,7 @@ app.get("/api/admin/habits", auth, async (req, res) => {
 
 /* ================= PUBLIC ================= */
 
-app.get("*", (req, res) => {
+app.get("/*", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
