@@ -1,58 +1,30 @@
-import {useEffect,useState} from "react";
-import {apiRequest} from "../api";
+import { useEffect, useState } from "react"
+import API_URL from "../api"
 
 export default function Admin(){
 
-const[habits,setHabits]=useState([]);
+  const [habits,setHabits]=useState([])
 
-async function load(){
+  useEffect(()=>{
+    fetch(`${API_URL}/api/habits/all`,{
+      headers:{
+        Authorization:`Bearer ${localStorage.getItem("token")}`
+      }
+    })
+    .then(res=>res.json())
+    .then(setHabits)
+  },[])
 
-const data = await apiRequest("/admin/habits");
+  return(
+    <div className="container">
+      <h2>Admin Panel</h2>
 
-setHabits(data);
-
-}
-
-useEffect(()=>{
-
-load();
-
-},[]);
-
-return(
-
-<div>
-
-<h2>Admin Panel</h2>
-
-<table>
-
-<thead>
-<tr>
-<th>User</th>
-<th>Habit</th>
-<th>Status</th>
-</tr>
-</thead>
-
-<tbody>
-
-{habits.map(h=>(
-<tr key={h._id}>
-
-<td>{h.userId?.email}</td>
-<td>{h.title}</td>
-<td>{h.completed ? "Done" : "Not done"}</td>
-
-</tr>
-))}
-
-</tbody>
-
-</table>
-
-</div>
-
-)
-
+      {habits.map(h=>(
+        <div key={h._id} className="card">
+          <p>{h.title}</p>
+          <small>{h.user}</small>
+        </div>
+      ))}
+    </div>
+  )
 }

@@ -1,97 +1,34 @@
-import {useEffect,useState} from "react";
-
-import {apiRequest} from "../api";
-
-import HabitCard from "../components/HabitCard";
-import AnalyticsChart from "../components/AnalyticsChart";
+import { useEffect, useState } from "react"
+import API_URL from "../api"
+import HabitForm from "../components/HabitForm"
+import HabitList from "../components/HabitList"
+import AnalyticsChart from "../components/AnalyticsChart"
 
 export default function Dashboard(){
 
-const[habits,setHabits]=useState([]);
-const[title,setTitle]=useState("");
-const[stats,setStats]=useState(null);
+  const [habits,setHabits]=useState([])
 
-async function load(){
+  const fetchHabits = async ()=>{
+    const res = await fetch(`${API_URL}/api/habits`,{
+      headers:{
+        Authorization:`Bearer ${localStorage.getItem("token")}`
+      }
+    })
+    const data = await res.json()
+    setHabits(data)
+  }
 
-const data = await apiRequest("/habits");
+  useEffect(()=>{
+    fetchHabits()
+  },[])
 
-setHabits(data);
+  return(
+    <div className="container">
+      <h2>My Habits</h2>
 
-const s = await apiRequest("/stats");
-
-setStats(s);
-
-}
-
-useEffect(()=>{
-
-load();
-
-},[]);
-
-async function addHabit(e){
-
-e.preventDefault();
-
-await apiRequest("/habits","POST",{title});
-
-setTitle("");
-
-load();
-
-}
-
-async function toggle(id){
-
-await apiRequest("/habits/"+id,"PUT");
-
-load();
-
-}
-
-async function remove(id){
-
-await apiRequest("/habits/"+id,"DELETE");
-
-load();
-
-}
-
-return(
-
-<div>
-
-<h2>My Habits</h2>
-
-<form onSubmit={addHabit}>
-
-<input
-value={title}
-onChange={e=>setTitle(e.target.value)}
-placeholder="New habit"
-/>
-
-<button>Add</button>
-
-</form>
-
-<AnalyticsChart stats={stats}/>
-
-<div className="habits">
-
-{habits.map(h=>(
-<HabitCard
-key={h._id}
-habit={h}
-toggle={toggle}
-remove={remove}
-/>
-))}
-
-</div>
-
-</div>
-
-)
-
+      <HabitForm refresh={fetchHabits}/>
+      <HabitList habits={habits} refresh={fetchHabits}/>
+      <AnalyticsChart habits={habits}/>
+    </div>
+  )
 }

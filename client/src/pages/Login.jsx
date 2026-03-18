@@ -1,72 +1,38 @@
-import { useState } from "react";
-import { apiRequest } from "../api";
+import { useState } from "react"
+import API_URL from "../api"
+import { useNavigate } from "react-router-dom"
 
 export default function Login() {
+  const [email,setEmail]=useState("")
+  const [password,setPassword]=useState("")
+  const navigate = useNavigate()
 
-  const [email,setEmail] = useState("");
-  const [password,setPassword] = useState("");
-  const [mode,setMode] = useState("login");
+  const login = async () => {
+    const res = await fetch(`${API_URL}/api/login`,{
+      method:"POST",
+      headers:{ "Content-Type":"application/json" },
+      body:JSON.stringify({ email,password })
+    })
 
-  async function submit(e){
+    const data = await res.json()
 
-    e.preventDefault();
+    localStorage.setItem("token",data.token)
+    localStorage.setItem("user",JSON.stringify(data.user))
 
-    const url = mode === "login"
-      ? "/auth/login"
-      : "/auth/register";
-
-    const data = await apiRequest(url,"POST",{email,password});
-
-    if(data.token){
-
-      localStorage.setItem("token",data.token);
-
-      if(data.user?.role === "admin")
-        window.location="/admin"
-      else
-        window.location="/dashboard"
-
-    } else {
-
-      alert(data.message);
-
+    if(data.user.role === "admin"){
+      navigate("/admin")
+    }else{
+      navigate("/dashboard")
     }
-
   }
 
   return (
-
-    <div className="login">
-
-      <h2>Habit Tracker</h2>
-
-      <form onSubmit={submit}>
-
-        <input
-        placeholder="email"
-        onChange={e=>setEmail(e.target.value)}
-        />
-
-        <input
-        type="password"
-        placeholder="password"
-        onChange={e=>setPassword(e.target.value)}
-        />
-
-        <button>
-          {mode === "login" ? "Login" : "Register"}
-        </button>
-
-      </form>
-
-      <p onClick={()=>setMode(
-        mode === "login" ? "register" : "login"
-      )}>
-        Switch to {mode === "login" ? "register" : "login"}
-      </p>
-
+    <div className="container">
+      <h2>Login</h2>
+      <input placeholder="Email" onChange={e=>setEmail(e.target.value)} />
+      <input placeholder="Password" type="password" onChange={e=>setPassword(e.target.value)} />
+      <button onClick={login}>Login</button>
+      <p onClick={()=>navigate("/register")}>Register</p>
     </div>
-
-  );
-
+  )
 }
