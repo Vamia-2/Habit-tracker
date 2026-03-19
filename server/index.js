@@ -15,22 +15,26 @@ dotenv.config()
 
 const app = express()
 
-// middleware
+// ================= MIDDLEWARE =================
 app.use(cors())
 app.use(express.json())
 
-// MongoDB
+// ================= MONGODB =================
 mongoose.connect(process.env.MONGO_URI)
-.then(()=>console.log("MongoDB connected"))
-.catch(err=>console.log(err))
+  .then(() => console.log("✅ MongoDB connected"))
+  .catch(err => console.log("❌ Mongo error:", err))
 
-// paths (для React)
+// ================= PATH =================
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
-// віддаємо React build
-app.use(express.static(path.join(__dirname, "public")))
+// ================= STATIC (REACT BUILD) =================
+app.use(express.static(path.join(__dirname, "../client/dist")))
 
+// ================= TEST =================
+app.get("/api/test", (req, res) => {
+  res.send("API working 🚀")
+})
 
 // ================= AUTH =================
 
@@ -51,7 +55,6 @@ app.post("/api/register", async (req, res) => {
     res.status(500).json(err)
   }
 })
-
 
 // login
 app.post("/api/login", async (req, res) => {
@@ -80,7 +83,6 @@ app.post("/api/login", async (req, res) => {
   }
 })
 
-
 // ================= HABITS =================
 
 // get habits
@@ -89,18 +91,18 @@ app.get("/api/habits", auth, async (req, res) => {
   res.json(habits)
 })
 
-
 // create habit
 app.post("/api/habits", auth, async (req, res) => {
   const habit = new Habit({
     title: req.body.title,
-    user: req.user.id
+    user: req.user.id,
+    completed: false,
+    date: new Date()
   })
 
   await habit.save()
   res.json(habit)
 })
-
 
 // update habit
 app.put("/api/habits/:id", auth, async (req, res) => {
@@ -113,26 +115,20 @@ app.put("/api/habits/:id", auth, async (req, res) => {
   res.json(habit)
 })
 
-
 // delete habit
 app.delete("/api/habits/:id", auth, async (req, res) => {
   await Habit.findByIdAndDelete(req.params.id)
   res.json({ message: "deleted" })
 })
 
-
-// ================= REACT FIX =================
-
-// ❗ ВАЖЛИВО: тільки app.use, НЕ app.get("*")
+// ================= SPA FIX =================
 app.use((req, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"))
+  res.sendFile(path.join(__dirname, "../client/dist/index.html"))
 })
 
-
 // ================= START =================
-
 const PORT = process.env.PORT || 5000
 
-app.listen(PORT, () => {
-  console.log("Server running on port", PORT)
+app.listen(PORT, "0.0.0.0", () => {
+  console.log("🚀 Server running on port", PORT)
 })
