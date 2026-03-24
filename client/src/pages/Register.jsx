@@ -107,7 +107,7 @@ export default function Register(){
         </div>
 
         <button className="theme-toggle" onClick={toggleTheme} title="Змінити тему">
-          {theme === "dark" ? "☀️" : theme === "light" ? "🌙" : "🎨"}
+          {theme === "dark" ? "🌙" : theme === "light" ? "☀️" : "🎨"}
         </button>
       </div>
     </div>

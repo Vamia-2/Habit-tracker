@@ -87,7 +87,7 @@ export default function Admin(){
           <h1>⚙️ Admin Panel</h1>
           <div className="header-controls">
             <button className="theme-toggle" onClick={toggleTheme}>
-              {theme === "dark" ? "☀️" : theme === "light" ? "🌙" : "🎨"}
+              {theme === "dark" ? "🌙" : theme === "light" ? "☀️" : "🎨"}
             </button>
             <a className="btn-secondary" href="/">← Back to Dashboard</a>
           </div>

@@ -1,9 +1,9 @@
 import mongoose from "mongoose"
 
 export default mongoose.model("User", new mongoose.Schema({
-  email: String,
-  password: String,
-  username: String,
+  email: { type: String, required: true, unique: true },
+  password: { type: String, required: true },
+  username: { type: String, required: true, unique: true },
   avatar: { type: String, default: "👤" },
   role: { type: String, default: "user" },
   isBlocked: { type: Boolean, default: false },

@@ -86,34 +86,85 @@ io.on("connection",(socket)=>{
 app.post("/api/register", async(req,res)=>{
   try {
     const { email, password, username } = req.body
+
+    // Валідація
+    if (!email || !password || !username) {
+      return res.status(400).json("Всі поля обов'язкові")
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json("Пароль повинен містити мінімум 6 символів")
+    }
+
     const hashedPassword = await bcrypt.hash(password, 10)
     const user = await User.create({
-      email,
+      email: email.toLowerCase(),
       password: hashedPassword,
-      username: username || email.split("@")[0]
+      username: username.trim()
     })
-    res.json(user)
+
+    res.json({
+      message: "Користувач успішно зареєстрований",
+      user: {
+        id: user._id,
+        email: user.email,
+        username: user.username
+      }
+    })
   } catch(e) {
-    res.status(400).json(e.message)
+    console.error("Registration error:", e)
+
+    // Обробка помилок дублікатів
+    if (e.code === 11000) {
+      const field = Object.keys(e.keyValue)[0]
+      if (field === 'email') {
+        return res.status(400).json("Користувач з таким email вже існує")
+      }
+      if (field === 'username') {
+        return res.status(400).json("Користувач з таким ім'ям вже існує")
+      }
+    }
+
+    res.status(500).json("Помилка сервера при реєстрації")
   }
 })
 
 app.post("/api/login", async(req,res)=>{
   try {
-    const user = await User.findOne({email:req.body.email})
-    if(!user) return res.status(404).json("No user")
+    const { email, password } = req.body
 
-    const match = await bcrypt.compare(req.body.password, user.password)
-    if(!match) return res.status(401).json("Wrong password")
+    if (!email || !password) {
+      return res.status(400).json("Email та пароль обов'язкові")
+    }
+
+    const user = await User.findOne({email: email.toLowerCase()})
+    if(!user) return res.status(404).json("Користувач не знайдений")
+
+    if (user.isBlocked) {
+      return res.status(403).json("Аккаунт заблоковано")
+    }
+
+    const match = await bcrypt.compare(password, user.password)
+    if(!match) return res.status(401).json("Невірний пароль")
 
     const token = jwt.sign(
       {id:user._id, role:user.role},
-      process.env.JWT_SECRET
+      process.env.JWT_SECRET,
+      { expiresIn: '7d' }
     )
 
-    res.json({token})
+    res.json({
+      token,
+      user: {
+        id: user._id,
+        email: user.email,
+        username: user.username,
+        role: user.role
+      }
+    })
   } catch(e) {
-    res.status(400).json(e.message)
+    console.error("Login error:", e)
+    res.status(500).json("Помилка сервера при вході")
   }
 })
 

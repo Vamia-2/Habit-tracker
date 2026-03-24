@@ -70,7 +70,7 @@ export default function Chat(){
           <h1>💬 Chat</h1>
           <div className="header-controls">
             <button className="theme-toggle" onClick={toggleTheme}>
-              {theme === "dark" ? "☀️" : theme === "light" ? "🌙" : "🎨"}
+              {theme === "dark" ? "🌙" : theme === "light" ? "☀️" : "🎨"}
             </button>
             <a className="btn-secondary" href="/">← Back</a>
           </div>

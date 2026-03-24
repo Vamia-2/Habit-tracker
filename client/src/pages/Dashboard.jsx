@@ -70,7 +70,7 @@ export default function Dashboard(){
         <h1>🎯 My Habits</h1>
         <div className="header-controls">
           <button className="theme-toggle" onClick={toggleTheme}>
-            {theme === "dark" ? "☀️" : theme === "light" ? "🌙" : "🎨"}
+            {theme === "dark" ? "🌙" : theme === "light" ? "☀️" : "🎨"}
           </button>
           <a className="btn-secondary" href="/chat">💬 Chat</a>
           <a className="btn-secondary" href="/admin">⚙️ Admin</a>
@@ -124,7 +124,7 @@ export default function Dashboard(){
           </div>
         </div>
 
-        <button className="btn-primary" onClick={add}>💾 Save</button>
+        <button className="btn-primary" onClick={add}>💾 Зберегти</button>
       </div>
 
       <div className="habits-grid">
