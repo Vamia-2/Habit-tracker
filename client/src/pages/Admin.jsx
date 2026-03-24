@@ -1,10 +1,13 @@
 import { useEffect, useState } from "react"
 import api from "../api"
 import { useTheme } from "../ThemeContext"
+import BarChart from "../components/BarChart"
+import LineChart from "../components/LineChart"
 
 export default function Admin(){
   const [users, setUsers] = useState([])
   const [complaints, setComplaints] = useState([])
+  const [habitsStats, setHabitsStats] = useState(null)
   const [tab, setTab] = useState("users") // users, complaints, stats
   const [blockDays, setBlockDays] = useState(7)
   const [selectedUser, setSelectedUser] = useState(null)
@@ -27,6 +30,9 @@ export default function Admin(){
 
       const complaintsRes = await api.get("/complaints")
       setComplaints(complaintsRes.data)
+
+      const habitsStatsRes = await api.get("/admin/habits-stats")
+      setHabitsStats(habitsStatsRes.data)
     } catch(e) {
       alert("У вас немає доступу до адмін панелі")
       window.location.href = "/"
@@ -220,25 +226,90 @@ export default function Admin(){
         {/* === STATS TAB === */}
         {tab === "stats" && (
           <div className="admin-content">
-            <h2>Статистика</h2>
-            <div className="stats-grid">
-              <div className="stat-card">
-                <h3>👥 Всього користувачів</h3>
-                <p className="stat-number">{users.length}</p>
-              </div>
-              <div className="stat-card">
-                <h3>⚠️ Заблокованих</h3>
-                <p className="stat-number">{users.filter(u => u.isBlocked).length}</p>
-              </div>
-              <div className="stat-card">
-                <h3>📋 Очікуючих скарг</h3>
-                <p className="stat-number">{complaints.filter(c => c.status === "pending").length}</p>
-              </div>
-              <div className="stat-card">
-                <h3>👑 Адміністраторів</h3>
-                <p className="stat-number">{users.filter(u => u.role === "admin").length}</p>
-              </div>
-            </div>
+            <h2>📊 Аналітика звичок</h2>
+            
+            {habitsStats ? (
+              <>
+                {/* Загальна статистика */}
+                <div className="stats-overview">
+                  <div className="stat-card">
+                    <h3>📝 Всього звичок</h3>
+                    <p className="stat-number">{habitsStats.totalHabits}</p>
+                  </div>
+                  <div className="stat-card">
+                    <h3>✅ Виконаних</h3>
+                    <p className="stat-number">{habitsStats.completedHabits}</p>
+                  </div>
+                  <div className="stat-card">
+                    <h3>📈 Відсоток виконання</h3>
+                    <p className="stat-number">
+                      {habitsStats.totalHabits > 0 
+                        ? Math.round((habitsStats.completedHabits / habitsStats.totalHabits) * 100) 
+                        : 0}%
+                    </p>
+                  </div>
+                  <div className="stat-card">
+                    <h3>👥 Активних користувачів</h3>
+                    <p className="stat-number">{habitsStats.userStats.length}</p>
+                  </div>
+                </div>
+
+                {/* Графіки */}
+                <div className="charts-section">
+                  <div className="chart-container">
+                    <h3>📊 Активність по днях (останні 30 днів)</h3>
+                    <div className="chart-wrapper">
+                      <LineChart habits={habitsStats.dailyStats.map(day => ({
+                        completedDates: Array(day.completed).fill(day.date)
+                      }))} />
+                    </div>
+                  </div>
+
+                  <div className="chart-container">
+                    <h3>📊 Рейтинг користувачів по виконанню</h3>
+                    <div className="chart-wrapper">
+                      <BarChart habits={habitsStats.userStats
+                        .sort((a, b) => b.completionRate - a.completionRate)
+                        .slice(0, 10)
+                        .map(stat => ({
+                          title: stat.user.username || stat.user.email,
+                          completedDates: Array(stat.completedHabits).fill('completed')
+                        }))} />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Детальна статистика по користувачах */}
+                <div className="user-stats-section">
+                  <h3>👥 Статистика по користувачах</h3>
+                  <div className="user-stats-table">
+                    {habitsStats.userStats
+                      .sort((a, b) => b.totalHabits - a.totalHabits)
+                      .map(stat => (
+                      <div key={stat.user._id} className="user-stat-row">
+                        <div className="user-stat-info">
+                          <p className="user-stat-name">{stat.user.username || stat.user.email}</p>
+                          <p className="user-stat-email">{stat.user.email}</p>
+                        </div>
+                        <div className="user-stat-numbers">
+                          <span className="stat-item">
+                            📝 {stat.totalHabits} звичок
+                          </span>
+                          <span className="stat-item">
+                            ✅ {stat.completedHabits} виконано
+                          </span>
+                          <span className="stat-item completion-rate">
+                            📈 {stat.completionRate}%
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="loading">Завантаження статистики...</div>
+            )}
           </div>
         )}
       </div>

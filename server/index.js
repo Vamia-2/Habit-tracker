@@ -31,8 +31,23 @@ mongoose.connect(process.env.MONGO_URI, {
   socketTimeoutMS: 45000,
   family: 4 // Use IPv4
 })
-.then(()=>{
+.then(async ()=>{
   console.log("✅ MongoDB успішно підключена!")
+
+  // ✅ Створюємо адміністратора, якщо його немає
+  const adminExists = await User.findOne({email: "admin@mail.com"})
+  if(!adminExists) {
+    const hashedPassword = await bcrypt.hash("1234", 10)
+    await User.create({
+      email: "admin@mail.com",
+      password: hashedPassword,
+      username: "admin",
+      role: "admin"
+    })
+    console.log("👑 Адміністратор створений: admin@mail.com / 1234")
+  } else {
+    console.log("👑 Адміністратор вже існує")
+  }
 })
 .catch(err=>{
   console.error("❌ Помилка підключення MongoDB:", err.message)
@@ -224,6 +239,49 @@ app.post("/api/admin/unblock/:userId", auth, async(req,res)=>{
     blockedUntil: null
   }, {new: true})
   res.json(user)
+})
+
+app.get("/api/admin/habits-stats", auth, async(req,res)=>{
+  if(req.user.role !== "admin") return res.sendStatus(403)
+  
+  const habits = await Habit.find().populate('user', 'username email')
+  
+  // Статистика по днях (останні 30 днів)
+  const last30Days = [...Array(30)].map((_, i) => {
+    const d = new Date()
+    d.setDate(d.getDate() - i)
+    return d.toISOString().slice(0, 10)
+  }).reverse()
+  
+  const dailyStats = last30Days.map(day => ({
+    date: day,
+    completed: habits.filter(h => h.completedDates.includes(day)).length,
+    total: habits.length
+  }))
+  
+  // Статистика по користувачах
+  const userStats = habits.reduce((acc, habit) => {
+    const userId = habit.user._id.toString()
+    if(!acc[userId]) {
+      acc[userId] = {
+        user: habit.user,
+        totalHabits: 0,
+        completedHabits: 0,
+        completionRate: 0
+      }
+    }
+    acc[userId].totalHabits++
+    if(habit.completed) acc[userId].completedHabits++
+    acc[userId].completionRate = Math.round((acc[userId].completedHabits / acc[userId].totalHabits) * 100)
+    return acc
+  }, {})
+  
+  res.json({
+    totalHabits: habits.length,
+    completedHabits: habits.filter(h => h.completed).length,
+    dailyStats,
+    userStats: Object.values(userStats)
+  })
 })
 
 // ✅ REACT BUILD
