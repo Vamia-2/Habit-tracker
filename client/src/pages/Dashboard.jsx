@@ -1,34 +1,33 @@
-import { useEffect, useState } from "react"
-import API_URL from "../api"
-import HabitForm from "../components/HabitForm"
-import HabitList from "../components/HabitList"
-import AnalyticsChart from "../components/AnalyticsChart"
+import { useEffect,useState } from "react"
+import api from "../api"
 
 export default function Dashboard(){
 
-  const [habits,setHabits]=useState([])
+  const [habits,setHabits] = useState([])
+  const [title,setTitle] = useState("")
 
-  const fetchHabits = async ()=>{
-    const res = await fetch(`${API_URL}/api/habits`,{
-      headers:{
-        Authorization:`Bearer ${localStorage.getItem("token")}`
-      }
-    })
-    const data = await res.json()
-    setHabits(data)
+  const load = async ()=>{
+    const res = await api.get("/habits")
+    setHabits(res.data)
   }
 
-  useEffect(()=>{
-    fetchHabits()
-  },[])
+  useEffect(()=>{load()},[])
+
+  const add = async ()=>{
+    await api.post("/habits",{title})
+    load()
+  }
 
   return(
-    <div className="container">
-      <h2>My Habits</h2>
+    <div>
+      <h2>Habits</h2>
 
-      <HabitForm refresh={fetchHabits}/>
-      <HabitList habits={habits} refresh={fetchHabits}/>
-      <AnalyticsChart habits={habits}/>
+      <input onChange={e=>setTitle(e.target.value)}/>
+      <button onClick={add}>Add</button>
+
+      {habits.map(h=>(
+        <div key={h._id}>{h.title}</div>
+      ))}
     </div>
   )
 }

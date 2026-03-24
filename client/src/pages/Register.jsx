@@ -1,45 +1,22 @@
 import { useState } from "react"
+import api from "../api"
 
-export default function Register() {
+export default function Register(){
 
-  const [email, setEmail] = useState("")
-  const [password, setPassword] = useState("")
+  const [email,setEmail] = useState("")
+  const [password,setPassword] = useState("")
 
-  const handleRegister = async () => {
-    try {
-      const res = await fetch("/api/register", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ email, password })
-      })
-
-      const data = await res.json()
-
-      alert("Registered successfully")
-
-    } catch (err) {
-      console.log(err)
-    }
+  const reg = async ()=>{
+    await api.post("/register",{email,password})
+    location.href="/login"
   }
 
-  return (
-    <div className="container">
+  return(
+    <div className="center">
       <h2>Register</h2>
-
-      <input
-        placeholder="Email"
-        onChange={e => setEmail(e.target.value)}
-      />
-
-      <input
-        type="password"
-        placeholder="Password"
-        onChange={e => setPassword(e.target.value)}
-      />
-
-      <button onClick={handleRegister}>Register</button>
+      <input onChange={e=>setEmail(e.target.value)}/>
+      <input onChange={e=>setPassword(e.target.value)}/>
+      <button onClick={reg}>Register</button>
     </div>
   )
 }

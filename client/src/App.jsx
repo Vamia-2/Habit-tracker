@@ -1,17 +1,20 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom"
-import Login from "./pages/Login"
-import Register from "./pages/Register"
-import Dashboard from "./pages/Dashboard"
-import Admin from "./pages/Admin"
+import { BrowserRouter,Routes,Route } from "react-router-dom"
 
-export default function App() {
-  return (
+import Login from "./pages/Login.jsx"
+import Register from "./pages/Register.jsx"
+import Dashboard from "./pages/Dashboard.jsx"
+import Admin from "./pages/Admin.jsx"
+import Chat from "./pages/Chat.jsx"
+
+export default function App(){
+  return(
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<Login />} />
-        <Route path="/register" element={<Register />} />
-        <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/admin" element={<Admin />} />
+        <Route path="/" element={<Dashboard/>}/>
+        <Route path="/login" element={<Login/>}/>
+        <Route path="/register" element={<Register/>}/>
+        <Route path="/admin" element={<Admin/>}/>
+        <Route path="/chat" element={<Chat/>}/>
       </Routes>
     </BrowserRouter>
   )
