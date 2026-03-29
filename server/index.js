@@ -21,7 +21,30 @@ const __dirname = path.dirname(__filename)
 dotenv.config({ path: path.join(__dirname, "../.env") })
 
 const app = express()
-app.use(cors({ origin: "*" }))
+
+const allowedOrigins = [
+  process.env.FRONTEND_URL,
+  "http://localhost:5173",
+  "http://127.0.0.1:5173",
+  "http://localhost:5000",
+  "http://127.0.0.1:5000"
+].filter(Boolean)
+
+const corsOptions = {
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true)
+    } else {
+      callback(new Error(`CORS blocked by origin: ${origin}`))
+    }
+  },
+  credentials: true
+}
+
+// ✅ CORS
+app.use(cors(corsOptions))
+app.options(/.*/, cors(corsOptions))
+
 app.use(express.json())
 
 // ✅ MongoDB підключення з параметрами
@@ -35,18 +58,32 @@ mongoose.connect(process.env.MONGO_URI, {
   console.log("✅ MongoDB успішно підключена!")
 
   // ✅ Створюємо адміністратора, якщо його немає
-  const adminExists = await User.findOne({email: "admin@mail.com"})
-  if(!adminExists) {
-    const hashedPassword = await bcrypt.hash("1234", 10)
-    await User.create({
-      email: "admin@mail.com",
-      password: hashedPassword,
-      username: "admin",
-      role: "admin"
+  try {
+    const adminExists = await User.findOne({
+      $or: [
+        { email: "admin@gmail.com" },
+        { username: "admin" }
+      ]
     })
-    console.log("👑 Адміністратор створений: admin@mail.com / 1234")
-  } else {
-    console.log("👑 Адміністратор вже існує")
+
+    if(!adminExists) {
+      const hashedPassword = await bcrypt.hash("1234", 10)
+      await User.create({
+        email: "admin@gmail.com",
+        password: hashedPassword,
+        username: "admin",
+        role: "admin"
+      })
+      console.log("👑 Адміністратор створений: admin@gmail.com / 1234")
+    } else {
+      console.log("👑 Адміністратор вже існує")
+    }
+  } catch(e) {
+    if (e.code === 11000) {
+      console.log("👑 Адміністратор вже існує (duplicate key)")
+    } else {
+      console.error("❌ Не вдалося перевірити / створити адміністратора:", e)
+    }
   }
 })
 .catch(err=>{
@@ -57,7 +94,13 @@ mongoose.connect(process.env.MONGO_URI, {
 
 // ✅ SOCKET (Chat + Real-time)
 const server = http.createServer(app)
-const io = new Server(server,{ cors:{origin:"*"} })
+const io = new Server(server, {
+  cors: {
+    origin: allowedOrigins,
+    methods: ["GET", "POST"],
+    credentials: true
+  }
+})
 
 let onlineUsers = {}
 
