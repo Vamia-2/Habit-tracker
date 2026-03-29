@@ -9,6 +9,7 @@ export default function Admin(){
   const [complaints, setComplaints] = useState([])
   const [habitsStats, setHabitsStats] = useState(null)
   const [tab, setTab] = useState("users") // users, complaints, stats
+  const [userSearch, setUserSearch] = useState("")
   const [blockDays, setBlockDays] = useState(7)
   const [selectedUser, setSelectedUser] = useState(null)
   const { theme, toggleTheme } = useTheme()
@@ -73,7 +74,7 @@ export default function Admin(){
         status,
         blockDuration: blockDaysValue
       })
-      alert(`Скарга ${status === "approved" ? "відхилена" : "прийнята"}`)
+      alert(`Скарга ${status === "approved" ? "прийнята" : "відхилена"}`)
       load()
     } catch(e) {
       alert("Помилка обробки скарги")
@@ -118,9 +119,23 @@ export default function Admin(){
         {tab === "users" && (
           <div className="admin-content">
             <h2>Управління користувачами</h2>
+            <div className="users-search">
+              <input
+                type="search"
+                placeholder="Пошук користувача за email або іменем"
+                value={userSearch}
+                onChange={e => setUserSearch(e.target.value)}
+                className="user-search-input"
+              />
+            </div>
             <div className="users-table">
-              {users.map(u => (
-                <div key={u._id} className="user-row">
+              {users
+                .filter(u =>
+                  u.username?.toLowerCase().includes(userSearch.toLowerCase()) ||
+                  u.email.toLowerCase().includes(userSearch.toLowerCase())
+                )
+                .map(u => (
+                  <div key={u._id} className="user-row">
                   <div className="user-info">
                     <p className="user-name">{u.username || u.email}</p>
                     <p className="user-email">{u.email}</p>
@@ -185,7 +200,8 @@ export default function Admin(){
                     </div>
 
                     <div className="complaint-body">
-                      <p><strong>На користувача:</strong> {c.reportedUser?.username || "Unknown"} ({c.reportedUser?.email})</p>
+                      <p><strong>Від кого:</strong> {c.reporter?.username || c.reporterEmail || c.reporter?.email || "Unknown"}</p>
+                      <p><strong>На кого:</strong> {c.reportedUser?.username || c.reportedUserEmail || c.reportedUser?.email || "Unknown"}</p>
                       <p><strong>Причина:</strong> {c.reason}</p>
                       <p><strong>Опис:</strong> {c.description}</p>
                     </div>

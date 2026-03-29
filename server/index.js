@@ -66,8 +66,8 @@ mongoose.connect(process.env.MONGO_URI, {
       ]
     })
 
+    const hashedPassword = await bcrypt.hash("1234", 10)
     if(!adminExists) {
-      const hashedPassword = await bcrypt.hash("1234", 10)
       await User.create({
         email: "admin@gmail.com",
         password: hashedPassword,
@@ -76,7 +76,22 @@ mongoose.connect(process.env.MONGO_URI, {
       })
       console.log("👑 Адміністратор створений: admin@gmail.com / 1234")
     } else {
-      console.log("👑 Адміністратор вже існує")
+      let updated = false
+      if(adminExists.role !== "admin") {
+        adminExists.role = "admin"
+        updated = true
+      }
+      const passwordMatches = await bcrypt.compare("1234", adminExists.password)
+      if(!passwordMatches) {
+        adminExists.password = hashedPassword
+        updated = true
+      }
+      if(updated) {
+        await adminExists.save()
+        console.log("👑 Адміністратор оновлений: admin@gmail.com / 1234")
+      } else {
+        console.log("👑 Адміністратор вже існує")
+      }
     }
   } catch(e) {
     if (e.code === 11000) {
@@ -191,7 +206,7 @@ app.post("/api/login", async(req,res)=>{
     if(!match) return res.status(401).json("Невірний пароль")
 
     const token = jwt.sign(
-      {id:user._id, role:user.role},
+      {id:user._id, email:user.email, role:user.role},
       process.env.JWT_SECRET,
       { expiresIn: '7d' }
     )
@@ -238,7 +253,12 @@ app.post("/api/unfollow/:userId", auth, async(req,res)=>{
 
 // ✅ HABITS
 app.get("/api/habits", auth, async(req,res)=>{
-  const habits = await Habit.find({user:req.user.id})
+  const habits = await Habit.find({user:req.user.id, deleted:false})
+  res.json(habits)
+})
+
+app.get("/api/habits/public", auth, async(req,res)=>{
+  const habits = await Habit.find({public:true, deleted:false}).populate("user", "username email")
   res.json(habits)
 })
 
@@ -251,13 +271,82 @@ app.post("/api/habits", auth, async(req,res)=>{
 })
 
 app.put("/api/habits/:id", auth, async(req,res)=>{
-  const habit = await Habit.findByIdAndUpdate(req.params.id, req.body, {new: true})
+  const habit = await Habit.findById(req.params.id)
+  if(!habit) return res.status(404).json("Habit not found")
+  if(habit.user.toString() !== req.user.id) return res.status(403).json("Forbidden")
+  Object.assign(habit, req.body)
+  await habit.save()
+  res.json(habit)
+})
+
+app.post("/api/habits/:id/comment", auth, async(req,res)=>{
+  const { text } = req.body
+  if(!text) return res.status(400).json("Коментар не може бути порожнім")
+
+  const habit = await Habit.findById(req.params.id)
+  if(!habit || !habit.public || habit.deleted) return res.status(404).json("Звичка не знайдена")
+
+  habit.comments.push({
+    userId: req.user.id,
+    username: req.user.username || req.user.email,
+    text,
+    createdAt: new Date()
+  })
+
+  await habit.save()
   res.json(habit)
 })
 
 app.delete("/api/habits/:id", auth, async(req,res)=>{
-  await Habit.findByIdAndDelete(req.params.id)
+  const habit = await Habit.findById(req.params.id)
+  if(!habit) return res.status(404).json("Habit not found")
+  if(habit.user.toString() !== req.user.id) return res.status(403).json("Forbidden")
+  habit.deleted = true
+  habit.deletedAt = new Date()
+  await habit.save()
   res.json("Deleted")
+})
+
+app.get("/api/users", auth, async(req,res)=>{
+  const filter = { _id: { $ne: req.user.id } }
+  if(req.query.email) {
+    filter.email = { $regex: req.query.email, $options: "i" }
+  }
+  const users = await User.find(filter).select("username email role isBlocked")
+  res.json(users)
+})
+
+app.get("/api/user/:id/stats", auth, async(req,res)=>{
+  const user = await User.findById(req.params.id).select("username email")
+  if(!user) return res.status(404).json("User not found")
+
+  const habits = await Habit.find({ user: req.params.id })
+  const completedCount = habits.filter(h => h.completed).length
+  const overdueCount = habits.filter(h => !h.completed && new Date(h.date) < new Date()).length
+  const pendingCount = habits.filter(h => !h.completed && new Date(h.date) >= new Date()).length
+  const totalCount = habits.length
+  const completionRate = totalCount ? Math.round((completedCount / totalCount) * 100) : 0
+
+  const last7Days = [...Array(7)].map((_, i) => {
+    const d = new Date()
+    d.setDate(d.getDate() - i)
+    return d.toISOString().slice(0, 10)
+  }).reverse()
+
+  const activity = last7Days.map(day => ({
+    date: day,
+    completed: habits.filter(h => h.completedAt && h.completedAt.toISOString().slice(0, 10) === day).length
+  }))
+
+  res.json({
+    user,
+    totalCount,
+    completedCount,
+    overdueCount,
+    pendingCount,
+    completionRate,
+    activity
+  })
 })
 
 // ✅ MESSAGES
@@ -273,9 +362,16 @@ app.get("/api/messages/:userId", auth, async(req,res)=>{
 
 // ✅ COMPLAINTS
 app.post("/api/complaint", auth, async(req,res)=>{
+  const { reportedUser, reportedUserEmail, reason, description, reporterEmail } = req.body
+  if(!reportedUser || !reason) return res.status(400).json("Потрібні reportedUser та reason")
+
   const complaint = await Complaint.create({
     reporter: req.user.id,
-    ...req.body
+    reporterEmail: reporterEmail || null,
+    reportedUser,
+    reportedUserEmail: reportedUserEmail || null,
+    reason,
+    description
   })
   res.json(complaint)
 })
@@ -349,7 +445,7 @@ app.get("/api/admin/habits-stats", auth, async(req,res)=>{
   
   const dailyStats = last30Days.map(day => ({
     date: day,
-    completed: habits.filter(h => h.completedDates.includes(day)).length,
+    completed: habits.filter(h => h.completedAt && h.completedAt.toISOString().slice(0, 10) === day).length,
     total: habits.length
   }))
   
