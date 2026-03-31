@@ -52,8 +52,11 @@ export default function BarChart({ habits }) {
         }
       },
       y: {
+        beginAtZero: true,
         ticks: {
-          color: "white"
+          color: "white",
+          stepSize: 1,
+          callback: value => Number(value).toFixed(0)
         }
       }
     }

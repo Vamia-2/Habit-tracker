@@ -11,6 +11,7 @@ export default function Dashboard(){
   const [achievements, setAchievements] = useState([])
   const [commentText, setCommentText] = useState({})
   const [showAnalytics, setShowAnalytics] = useState(false)
+  const [analyticsTab, setAnalyticsTab] = useState("overview")
   const [title, setTitle] = useState("")
   const [date, setDate] = useState(new Date().toISOString().split('T')[0])
   const [time, setTime] = useState("09:00")
@@ -44,19 +45,33 @@ export default function Dashboard(){
   }
 
   const requestReminderPermission = async () => {
-    if (!('Notification' in window)) return
-    if (Notification.permission === 'default') {
-      await Notification.requestPermission()
+    if (!('Notification' in window)) {
+      alert("Ваш браузер не підтримує нагадування через Notification API.")
+      return false
     }
+
+    if (Notification.permission === 'default') {
+      const permission = await Notification.requestPermission()
+      return permission === 'granted'
+    }
+
+    if (Notification.permission === 'denied') {
+      alert("Ви відхилили повідомлення. Увімкніть сповіщення в налаштуваннях браузера.")
+      return false
+    }
+
+    return Notification.permission === 'granted'
   }
 
   const scheduleReminders = async (habitList) => {
     reminderTimeouts.current.forEach(timeoutId => clearTimeout(timeoutId))
     reminderTimeouts.current = []
 
-    if (!('Notification' in window) || Notification.permission === 'denied') return
+    if (!('Notification' in window)) return
+    if (Notification.permission === 'denied') return
     if (Notification.permission === 'default') {
-      await requestReminderPermission()
+      const granted = await requestReminderPermission()
+      if (!granted) return
     }
     if (Notification.permission !== 'granted') return
 
@@ -114,12 +129,27 @@ export default function Dashboard(){
       return `🔥 ${habit.streakCount} днів підряд`
     }
     if (index === 0) {
-      return isOverdue ? "⚠️ Перша просрочена звичка" : "🥇 Перша звичка"
+      return isOverdue ? "⚠️ Перше прострочене досягнення" : "🥇 Перша звичка"
     }
     if (isOverdue) {
       return "⚠️ Прострочене досягнення"
     }
     return "🏆 Досягнення"
+  }
+
+  const getAchievementSubtitle = (habit, index) => {
+    const isOverdue = habit.completedAt && new Date(habit.completedAt) > new Date(habit.date)
+
+    if (habit.streakCount > 1) {
+      return `Підтримай серію — ${habit.streakCount} дні підряд!`
+    }
+    if (index === 0) {
+      return isOverdue ? "Перший урок: не пропускай наступну звичку." : "Перший крок на шляху до звички."
+    }
+    if (isOverdue) {
+      return "Не засмучуйся — будь уважнішим наступного разу."
+    }
+    return "Класно, ти рухаєшся вперед!"
   }
 
   const add = async () => {
@@ -245,27 +275,47 @@ export default function Dashboard(){
       {showAnalytics && (
         <div className="analytics-panel">
           <h2>📊 Аналітика моїх звичок</h2>
-          <div className="analytics-cards">
-            <div className="stat-card">
-              <h3>✅ Виконано</h3>
-              <p className="stat-number">{completedCount}</p>
-            </div>
-            <div className="stat-card">
-              <h3>⭕ Невиконано</h3>
-              <p className="stat-number">{pendingCount}</p>
-            </div>
-            <div className="stat-card">
-              <h3>⏰ Просрочено</h3>
-              <p className="stat-number">{overdueCount}</p>
-            </div>
-            <div className="stat-card">
-              <h3>📈 Відсоток</h3>
-              <p className="stat-number">{completionRate}%</p>
-            </div>
+          <div className="analytics-tabs">
+            <button
+              className={`tab ${analyticsTab === "overview" ? "active" : ""}`}
+              onClick={() => setAnalyticsTab("overview")}
+            >
+              🔎 Огляд
+            </button>
+            <button
+              className={`tab ${analyticsTab === "chart" ? "active" : ""}`}
+              onClick={() => setAnalyticsTab("chart")}
+            >
+              📈 Графік
+            </button>
           </div>
-          <div className="analytics-chart">
-            <LineChart habits={completionChartHabits} />
-          </div>
+
+          {analyticsTab === "overview" && (
+            <div className="analytics-cards">
+              <div className="stat-card">
+                <h3>✅ Виконано</h3>
+                <p className="stat-number">{Number(completedCount)}</p>
+              </div>
+              <div className="stat-card">
+                <h3>⭕ Невиконано</h3>
+                <p className="stat-number">{Number(pendingCount)}</p>
+              </div>
+              <div className="stat-card">
+                <h3>⏰ Просрочено</h3>
+                <p className="stat-number">{Number(overdueCount)}</p>
+              </div>
+              <div className="stat-card">
+                <h3>📈 Відсоток</h3>
+                <p className="stat-number">{Number(completionRate)}%</p>
+              </div>
+            </div>
+          )}
+
+          {analyticsTab === "chart" && (
+            <div className="analytics-chart">
+              <LineChart habits={completionChartHabits} />
+            </div>
+          )}
         </div>
       )}
 
@@ -321,10 +371,14 @@ export default function Dashboard(){
               disabled={isBlocked}
               onChange={async e => {
                 const next = e.target.checked
-                setReminder(next)
                 if (next) {
-                  await requestReminderPermission()
+                  const granted = await requestReminderPermission()
+                  if (!granted) {
+                    setReminder(false)
+                    return
+                  }
                 }
+                setReminder(next)
               }}
             />
             <label htmlFor="reminder">🔔 Нагадувати</label>
@@ -369,6 +423,7 @@ export default function Dashboard(){
               <div className="achievement-header">
                 <div>
                   <h3>{getAchievementTitle(h, idx)}</h3>
+                  <p className="achievement-note">{getAchievementSubtitle(h, idx)}</p>
                   <p className="achievement-status">
                     {h.public ? "Публічне досягнення" : "Лише для вас"}
                   </p>

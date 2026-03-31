@@ -479,6 +479,12 @@ app.put("/api/complaint/:id", auth, async(req,res)=>{
   res.json(updated)
 })
 
+app.delete("/api/complaint/:id", auth, async(req,res)=>{
+  if(req.user.role !== "admin") return res.sendStatus(403)
+  await Complaint.findByIdAndDelete(req.params.id)
+  res.json({ message: "Complaint deleted" })
+})
+
 // ✅ ADMIN
 app.get("/api/admin/users", auth, async(req,res)=>{
   if(req.user.role !== "admin") return res.sendStatus(403)

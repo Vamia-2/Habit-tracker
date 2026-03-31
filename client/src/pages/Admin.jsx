@@ -6,9 +6,9 @@ import LineChart from "../components/LineChart"
 
 export default function Admin(){
   const [users, setUsers] = useState([])
-  const [complaints, setComplaints] = useState([])
   const [habitsStats, setHabitsStats] = useState(null)
-  const [tab, setTab] = useState("users") // users, complaints, stats
+  const [complaints, setComplaints] = useState([])
+  const [tab, setTab] = useState("users") // users, stats, complaints
   const [userSearch, setUserSearch] = useState("")
   const [blockDays, setBlockDays] = useState(7)
   const [selectedUser, setSelectedUser] = useState(null)
@@ -29,14 +29,34 @@ export default function Admin(){
       const usersRes = await api.get("/admin/users")
       setUsers(usersRes.data)
 
-      const complaintsRes = await api.get("/complaints")
-      setComplaints(complaintsRes.data)
-
       const habitsStatsRes = await api.get("/admin/habits-stats")
       setHabitsStats(habitsStatsRes.data)
+
+      const complaintsRes = await api.get("/complaints")
+      setComplaints(complaintsRes.data)
     } catch(e) {
       alert("У вас немає доступу до адмін панелі")
       window.location.href = "/"
+    }
+  }
+
+  const updateComplaintStatus = async (complaintId, status) => {
+    try {
+      await api.put(`/complaint/${complaintId}`, { status })
+      alert(`Скаргу ${status === 'approved' ? 'підтверджено' : 'відхилено'}`)
+      load()
+    } catch(e) {
+      alert("Не вдалося оновити статус скарги")
+    }
+  }
+
+  const deleteComplaint = async (complaintId) => {
+    try {
+      await api.delete(`/complaint/${complaintId}`)
+      alert("Скаргу видалено")
+      load()
+    } catch(e) {
+      alert("Не вдалося видалити скаргу")
     }
   }
 
@@ -78,30 +98,16 @@ export default function Admin(){
     }
   }
 
-  const handleComplaint = async (complaintId, status) => {
-    try {
-      const blockDaysValue = status === "approved" ? blockDays : 0
-      await api.put(`/complaint/${complaintId}`, {
-        status,
-        blockDuration: blockDaysValue
-      })
-      alert(`Скарга ${status === "approved" ? "прийнята" : "відхилена"}`)
-      load()
-    } catch(e) {
-      alert("Помилка обробки скарги")
-    }
-  }
-
   return (
     <div className={`admin-page ${theme}`}>
       <div className="admin-container">
         <div className="admin-header">
-          <h1>⚙️ Admin Panel</h1>
+          <h1>⚙️ Панель адміністратора</h1>
           <div className="header-controls">
             <button className="theme-toggle" onClick={toggleTheme}>
               {theme === "dark" ? "🌙" : theme === "light" ? "☀️" : "🎨"}
             </button>
-            <a className="btn-secondary" href="/">← Back to Dashboard</a>
+            <a className="btn-secondary" href="/">← Назад на панель</a>
           </div>
         </div>
 
@@ -110,19 +116,19 @@ export default function Admin(){
             className={`tab ${tab === "users" ? "active" : ""}`}
             onClick={() => setTab("users")}
           >
-            👥 Users ({users.length})
-          </button>
-          <button 
-            className={`tab ${tab === "complaints" ? "active" : ""}`}
-            onClick={() => setTab("complaints")}
-          >
-            📋 Complaints ({complaints.filter(c => c.status === "pending").length})
+            👥 Користувачі ({users.length})
           </button>
           <button 
             className={`tab ${tab === "stats" ? "active" : ""}`}
             onClick={() => setTab("stats")}
           >
-            📊 Statistics
+            📊 Статистика
+          </button>
+          <button 
+            className={`tab ${tab === "complaints" ? "active" : ""}`}
+            onClick={() => setTab("complaints")}
+          >
+            📣 Скарги ({complaints.length})
           </button>
         </div>
 
@@ -152,7 +158,7 @@ export default function Admin(){
                     <p className="user-email">{u.email}</p>
                     <div className="user-badges">
                       <span className={`badge ${u.role === "admin" ? "admin" : "user"}`}>
-                        {u.role === "admin" ? "👑 Admin" : "👤 User"}
+                        {u.role === "admin" ? "👑 Адмін" : "👤 Користувач"}
                       </span>
                       {u.isBlocked && (
                         <span className="badge blocked">🔒 Заблоковано</span>
@@ -196,63 +202,6 @@ export default function Admin(){
                 </div>
               ))}
             </div>
-          </div>
-        )}
-
-        {/* === COMPLAINTS TAB === */}
-        {tab === "complaints" && (
-          <div className="admin-content">
-            <h2>Скарги користувачів</h2>
-            {complaints.length === 0 ? (
-              <p className="no-data">Нема скарг</p>
-            ) : (
-              <div className="complaints-list">
-                {complaints.map(c => (
-                  <div key={c._id} className={`complaint-card ${c.status}`}>
-                    <div className="complaint-header">
-                      <h3>Скарга від {c.reporter?.username || "Unknown"}</h3>
-                      <span className={`status-badge ${c.status}`}>
-                        {c.status === "pending" ? "⏳ Очікує" : c.status === "approved" ? "✅ Одобрено" : "❌ Відхилено"}
-                      </span>
-                    </div>
-
-                    <div className="complaint-body">
-                      <p><strong>Від кого:</strong> {c.reporter?.username || c.reporterEmail || c.reporter?.email || "Unknown"}</p>
-                      <p><strong>На кого:</strong> {c.reportedUser?.username || c.reportedUserEmail || c.reportedUser?.email || "Unknown"}</p>
-                      <p><strong>Причина:</strong> {c.reason}</p>
-                      <p><strong>Опис:</strong> {c.description}</p>
-                    </div>
-
-                    {c.status === "pending" && (
-                      <div className="complaint-actions">
-                        <div className="form-group">
-                          <label>Блокувати на днів:</label>
-                          <input 
-                            type="number"
-                            min="1"
-                            value={blockDays}
-                            onChange={e => setBlockDays(Number(e.target.value))}
-                            className="block-input"
-                          />
-                        </div>
-                        <button 
-                          className="btn-success"
-                          onClick={() => handleComplaint(c._id, "approved")}
-                        >
-                          ✅ Одобрити
-                        </button>
-                        <button 
-                          className="btn-danger"
-                          onClick={() => handleComplaint(c._id, "rejected")}
-                        >
-                          ❌ Відхилити
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
         )}
 
@@ -343,6 +292,56 @@ export default function Admin(){
             ) : (
               <div className="loading">Завантаження статистики...</div>
             )}
+          </div>
+        )}
+
+        {tab === "complaints" && (
+          <div className="admin-content">
+            <h2>📣 Керування скаргами</h2>
+            <div className="complaints-list">
+              {complaints.length > 0 ? complaints.map((complaint) => (
+                <div key={complaint._id} className={`complaint-card ${complaint.status || 'pending'}`}>
+                  <div className="complaint-header">
+                    <div>
+                      <h3>{complaint.reason}</h3>
+                      <p>Від: {complaint.reporter?.username || complaint.reporter?.email || complaint.reporterEmail}</p>
+                      <p>На: {complaint.reportedUser?.username || complaint.reportedUser?.email || complaint.reportedUserEmail}</p>
+                    </div>
+                            <span className="complaint-badge">
+                      {complaint.status === 'approved' ? 'ПІДТВЕРДЖЕНО' : complaint.status === 'rejected' ? 'ВІДХИЛЕНО' : 'В ОБРОБЦІ'}
+                    </span>
+                  </div>
+                  <div className="complaint-body">
+                    <p>{complaint.description || 'Без опису'}</p>
+                    <p><strong>Дата:</strong> {new Date(complaint.createdAt).toLocaleString()}</p>
+                  </div>
+                  <div className="complaint-actions">
+                    <button
+                      className="btn-success"
+                      onClick={() => updateComplaintStatus(complaint._id, 'approved')}
+                      disabled={complaint.status === 'approved'}
+                    >
+                      Підтвердити
+                    </button>
+                    <button
+                      className="btn-secondary"
+                      onClick={() => updateComplaintStatus(complaint._id, 'rejected')}
+                      disabled={complaint.status === 'rejected'}
+                    >
+                      Відхилити
+                    </button>
+                    <button
+                      className="btn-danger"
+                      onClick={() => deleteComplaint(complaint._id)}
+                    >
+                      Видалити
+                    </button>
+                  </div>
+                </div>
+              )) : (
+                <p>Немає нових скарг.</p>
+              )}
+            </div>
           </div>
         )}
       </div>

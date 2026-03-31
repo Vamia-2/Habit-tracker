@@ -55,20 +55,21 @@ body.blue {
 
 .auth-page.blue .auth-header h1,
 .auth-page.blue .auth-header p,
-.auth-page.blue .auth-form,
 .auth-page.blue .form-group label,
 .auth-page.blue .auth-switch a {
-  color: #1e293b;
+  color: #f1f5f9;
 }
 
 .auth-page.blue .auth-form {
-  background: rgba(255, 255, 255, 0.95);
+  background: rgba(255, 255, 255, 0.08);
+  color: #f1f5f9;
+  border: 1px solid rgba(255, 255, 255, 0.12);
 }
 
 .auth-page.blue .form-group input {
-  background: white;
-  color: #1e293b;
-  border-color: #cbd5e1;
+  background: rgba(255, 255, 255, 0.15);
+  color: #f1f5f9;
+  border-color: rgba(255, 255, 255, 0.16);
 }
 
 .auth-container {
@@ -510,6 +511,45 @@ button:disabled {
   align-items: flex-start;
   gap: 12px;
   margin-bottom: 16px;
+}
+
+.achievement-note {
+  margin: 6px 0 0;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.analytics-panel {
+  margin-bottom: 30px;
+}
+
+.analytics-tabs {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.analytics-tabs .tab {
+  padding: 10px 18px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.analytics-tabs .tab.active {
+  background: rgba(59, 130, 246, 0.15);
+  border-color: rgba(59, 130, 246, 0.4);
+}
+
+.dashboard.light .analytics-tabs .tab {
+  background: rgba(15, 23, 42, 0.04);
+}
+
+.dashboard.light .analytics-tabs .tab.active {
+  background: rgba(59, 130, 246, 0.15);
+}
+
+.dashboard.light .achievement-note {
+  color: rgba(30, 41, 59, 0.7);
 }
 
 .achievement-actions {
