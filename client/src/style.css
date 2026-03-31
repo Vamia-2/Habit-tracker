@@ -17,7 +17,7 @@ body {
 }
 
 body.dark {
-  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  background: #0f172a;
   color: #f1f5f9;
 }
 
@@ -42,7 +42,7 @@ body.blue {
 }
 
 .auth-page.dark {
-  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  background: #0f172a;
 }
 
 .auth-page.light {
@@ -51,6 +51,24 @@ body.blue {
 
 .auth-page.blue {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.auth-page.blue .auth-header h1,
+.auth-page.blue .auth-header p,
+.auth-page.blue .auth-form,
+.auth-page.blue .form-group label,
+.auth-page.blue .auth-switch a {
+  color: #1e293b;
+}
+
+.auth-page.blue .auth-form {
+  background: rgba(255, 255, 255, 0.95);
+}
+
+.auth-page.blue .form-group input {
+  background: white;
+  color: #1e293b;
+  border-color: #cbd5e1;
 }
 
 .auth-container {
@@ -233,9 +251,14 @@ button:disabled {
 .btn-danger-small {
   background: transparent;
   color: #ef4444;
-  padding: 4px 8px;
-  font-size: 18px;
-  border-radius: 6px;
+  padding: 6px;
+  font-size: 16px;
+  min-width: 34px;
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
   cursor: pointer;
 }
 
@@ -370,6 +393,25 @@ button:disabled {
   font-size: 20px;
 }
 
+.blocked-banner {
+  background: rgba(255, 115, 0, 0.12);
+  border: 1px solid rgba(255, 115, 0, 0.3);
+  color: #ff7a00;
+  padding: 18px 22px;
+  border-radius: 16px;
+  margin-bottom: 24px;
+}
+
+.blocked-banner h2 {
+  margin: 0 0 8px;
+  font-size: 20px;
+}
+
+.blocked-banner p {
+  margin: 0;
+  opacity: 0.9;
+}
+
 .form-row {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -427,10 +469,113 @@ button:disabled {
 }
 
 /* ===== HABITS GRID ===== */
-.habits-grid {
+.habits-grid,
+.achievements-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 20px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 18px;
+  align-items: stretch;
+}
+
+@media (min-width: 1200px) {
+  .habits-grid,
+  .achievements-grid {
+    grid-template-columns: repeat(4, minmax(220px, 1fr));
+  }
+}
+
+.achievement-card {
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(10px);
+  border-left: 4px solid #60a5fa;
+  padding: 20px;
+  border-radius: 16px;
+  transition: all 0.3s;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.dashboard.light .achievement-card {
+  background: rgba(255, 255, 255, 0.75);
+  color: #1e293b;
+}
+
+.achievement-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+}
+
+.achievement-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.achievement-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.achievement-header h3 {
+  font-size: 18px;
+  margin-bottom: 6px;
+}
+
+.achievement-status {
+  opacity: 0.8;
+  font-size: 13px;
+}
+
+.achievement-info {
+  font-size: 14px;
+  line-height: 1.6;
+  opacity: 0.9;
+  margin-bottom: 16px;
+}
+
+.achievement-comments {
+  margin-top: 16px;
+}
+
+.achievement-comments h4 {
+  margin-bottom: 10px;
+  font-size: 15px;
+}
+
+.comment-row {
+  margin-bottom: 10px;
+  font-size: 14px;
+  opacity: 0.9;
+}
+
+.comment-form {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+.comment-form input {
+  flex: 1;
+  min-width: 180px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  background: white;
+  color: #1e293b;
+}
+
+.dashboard.dark .comment-form input {
+  background: rgba(30, 41, 59, 0.6);
+  border-color: #475569;
+  color: #f1f5f9;
+}
+
+.comment-form button {
+  width: auto;
+  padding: 10px 16px;
 }
 
 .no-habits {

@@ -2,16 +2,19 @@ export default function HabitCard({ habit, onToggle, onDelete, onShare }) {
   const habitDate = new Date(habit.date)
   const today = new Date()
   const msPerDay = 1000 * 60 * 60 * 24
-  const daysUntil = Math.ceil((habitDate - today) / msPerDay)
-  const overdueDays = Math.floor((today - habitDate) / msPerDay)
-  
+  const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+  const startOfHabitDay = new Date(habitDate.getFullYear(), habitDate.getMonth(), habitDate.getDate())
+  const dayDifference = Math.round((startOfHabitDay - startOfToday) / msPerDay)
+  const isOverdue = habitDate < today
+  const overdueDays = isOverdue && dayDifference !== 0 ? Math.abs(dayDifference) : 0
+
   // Визначаємо колір на основі близькості до дати
   const getColorByProximity = () => {
-    if(daysUntil < 0) return "#e74c3c" // Червоний - вже пройшло
-    if(daysUntil === 0) return "#e67e22" // Сьогодні
-    if(daysUntil === 1) return "#f39c12" // Завтра
-    if(daysUntil <= 3) return "#f1c40f" // Ближче
-    if(daysUntil <= 7) return "#2ecc71" // Скоро
+    if (isOverdue) return "#e74c3c" // Червоний - вже пройшло
+    if (dayDifference === 0) return "#e67e22" // Сьогодні
+    if (dayDifference === 1) return "#f39c12" // Завтра
+    if (dayDifference <= 3) return "#f1c40f" // Ближче
+    if (dayDifference <= 7) return "#2ecc71" // Скоро
     return "#3498db" // Далеко
   }
 
@@ -35,13 +38,13 @@ export default function HabitCard({ habit, onToggle, onDelete, onShare }) {
   }
 
   const getProximityText = () => {
-    if(daysUntil < 0) {
-      const count = Math.abs(overdueDays)
-      return `${count} ${pluralizeDays(count)} тому`
+    if (isOverdue) {
+      if (overdueDays === 0) return "Сьогодні"
+      return `${overdueDays} днів тому`
     }
-    if(daysUntil === 0) return "Сьогодні"
-    if(daysUntil === 1) return "Завтра"
-    return `За ${daysUntil} ${pluralizeDays(daysUntil)}`
+    if (dayDifference === 0) return "Сьогодні"
+    if (dayDifference === 1) return "Завтра"
+    return `За ${dayDifference} ${pluralizeDays(dayDifference)}`
   }
 
   return (
@@ -55,8 +58,9 @@ export default function HabitCard({ habit, onToggle, onDelete, onShare }) {
       <div className="habit-header">
         <h3>{habit.title}</h3>
         <button 
+          type="button"
           className="btn-danger-small"
-          onClick={onDelete}
+          onClick={e => { e.preventDefault(); e.stopPropagation(); onDelete() }}
           title="Видалити"
         >
           ✕

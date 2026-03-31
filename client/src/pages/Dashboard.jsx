@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef } from "react"
+import { useNavigate } from "react-router-dom"
 import api from "../api"
 import HabitCard from "../components/HabitCard"
 import LineChart from "../components/LineChart"
@@ -7,6 +8,7 @@ import { useTheme } from "../ThemeContext"
 export default function Dashboard(){
   const [habits, setHabits] = useState([])
   const [publicHabits, setPublicHabits] = useState([])
+  const [achievements, setAchievements] = useState([])
   const [commentText, setCommentText] = useState({})
   const [showAnalytics, setShowAnalytics] = useState(false)
   const [title, setTitle] = useState("")
@@ -16,11 +18,18 @@ export default function Dashboard(){
   const [user, setUser] = useState(null)
   const reminderTimeouts = useRef([])
   const { theme, toggleTheme } = useTheme()
+  const navigate = useNavigate()
+
+  const blockedUntil = user?.blockedUntil ? new Date(user.blockedUntil) : null
+  const isBlocked = user?.isBlocked && blockedUntil && blockedUntil > new Date()
+  const blockedDays = isBlocked ? Math.max(1, Math.ceil((blockedUntil - Date.now()) / (1000 * 60 * 60 * 24))) : 0
 
   const load = async () => {
     try {
       const res = await api.get("/habits")
       setHabits(res.data)
+      const achievementsRes = await api.get("/habits/achievements")
+      setAchievements(achievementsRes.data)
       const publicRes = await api.get("/habits/public")
       setPublicHabits(publicRes.data)
       const token = localStorage.token
@@ -72,6 +81,11 @@ export default function Dashboard(){
 
   useEffect(() => { load() }, [])
 
+  const logout = () => {
+    localStorage.removeItem("token")
+    navigate("/login")
+  }
+
   useEffect(() => {
     scheduleReminders(habits)
   }, [habits])
@@ -86,13 +100,32 @@ export default function Dashboard(){
   const overdueCount = habits.filter(h => !h.completed && new Date(h.date) < new Date()).length
   const pendingCount = habits.filter(h => !h.completed && new Date(h.date) >= new Date()).length
   const completionRate = habits.length ? Math.round((completedCount / habits.length) * 100) : 0
-  const completionChartHabits = habits
-    .filter(h => h.completed)
+  const completionChartHabits = achievements
     .map(h => ({ completedDates: [new Date(h.completedAt || h.date).toISOString().slice(0,10)] }))
-  const myAchievements = habits.filter(h => h.completed)
+  const myAchievements = achievements
+    .slice()
+    .sort((a, b) => new Date(a.completedAt || a.date) - new Date(b.completedAt || b.date))
   const publicAchievements = publicHabits.filter(h => h.user?._id !== user?._id)
 
+  const getAchievementTitle = (habit, index) => {
+    const isOverdue = habit.completedAt && new Date(habit.completedAt) > new Date(habit.date)
+
+    if (habit.streakCount > 1) {
+      return `🔥 ${habit.streakCount} днів підряд`
+    }
+    if (index === 0) {
+      return isOverdue ? "⚠️ Перша просрочена звичка" : "🥇 Перша звичка"
+    }
+    if (isOverdue) {
+      return "⚠️ Прострочене досягнення"
+    }
+    return "🏆 Досягнення"
+  }
+
   const add = async () => {
+    if (isBlocked) {
+      return alert(`Ви заблоковані на ${blockedDays} ${blockedDays === 1 ? 'день' : 'днів'} і не можете додавати звички.`)
+    }
     if(!title) return alert("Введіть названя звички")
     
     try {
@@ -113,13 +146,35 @@ export default function Dashboard(){
   }
 
   const deleteHabit = async (id) => {
-    if(confirm("Видалити звичку?")) {
+    if (isBlocked) {
+      return alert(`Ви заблоковані на ${blockedDays} ${blockedDays === 1 ? 'день' : 'днів'} і не можете змінювати звички.`)
+    }
+    if (!confirm("Видалити звичку?")) return
+    try {
       await api.delete(`/habits/${id}`)
-      load()
+      setHabits(prev => prev.filter(h => h._id !== id))
+      setAchievements(prev => prev.filter(a => a._id !== id))
+    } catch (e) {
+      console.error(e)
+      alert("Не вдалося видалити звичку")
+    }
+  }
+
+  const deleteAchievement = async (id) => {
+    if (!confirm("Видалити досягнення?")) return
+    try {
+      await api.delete(`/achievements/${id}`)
+      setAchievements(prev => prev.filter(a => a._id !== id))
+    } catch (e) {
+      console.error(e)
+      alert("Не вдалося видалити досягнення")
     }
   }
 
   const toggleComplete = async (id, completed) => {
+    if (isBlocked) {
+      return alert(`Ви заблоковані на ${blockedDays} ${blockedDays === 1 ? 'день' : 'днів'} і не можете змінювати звички.`)
+    }
     await api.put(`/habits/${id}`, {
       completed: !completed,
       completedAt: !completed ? new Date() : null
@@ -128,6 +183,9 @@ export default function Dashboard(){
   }
 
   const toggleShare = async (habit) => {
+    if (isBlocked) {
+      return alert(`Ви заблоковані на ${blockedDays} ${blockedDays === 1 ? 'день' : 'днів'} і не можете змінювати звички.`)
+    }
     try {
       await api.put(`/habits/${habit._id}`, {
         public: !habit.public
@@ -139,6 +197,9 @@ export default function Dashboard(){
   }
 
   const addComment = async (habitId) => {
+    if (isBlocked) {
+      return alert(`Ви заблоковані на ${blockedDays} ${blockedDays === 1 ? 'день' : 'днів'} і не можете додавати коментарі.`)
+    }
     const text = commentText[habitId]
     if(!text) return
     try {
@@ -161,8 +222,23 @@ export default function Dashboard(){
           <button className="btn-secondary" onClick={() => setShowAnalytics(prev => !prev)}>
             📊 Аналітика
           </button>
-          <a className="btn-secondary" href="/chat">💬 Chat</a>
+          <button
+            className="btn-secondary"
+            onClick={() => {
+              if (isBlocked) {
+                alert(`Ви заблоковані на ${blockedDays} ${blockedDays === 1 ? 'день' : 'днів'}. Ви не можете подавати скаргу.`)
+                return
+              }
+              navigate("/complaint")
+            }}
+            disabled={isBlocked}
+          >
+            🚨 Скарга
+          </button>
           <a className="btn-secondary" href="/admin">⚙️ Admin</a>
+          <button className="btn-danger" onClick={logout}>
+            🔓 Вихід
+          </button>
         </div>
       </div>
 
@@ -193,6 +269,13 @@ export default function Dashboard(){
         </div>
       )}
 
+      {isBlocked && (
+        <div className="blocked-banner">
+          <h2>Ви заблоковані на {blockedDays} {blockedDays === 1 ? "день" : "днів"}</h2>
+          <p>Ви не можете створювати нові звички, змінювати існуючі або писати коментарі до завершення блокування.</p>
+        </div>
+      )}
+
       <div className="add-habit-form">
         <h3>Додай нову звичку</h3>
         
@@ -204,6 +287,7 @@ export default function Dashboard(){
               placeholder="напр. Читати книгу, Робити вправи..."
               value={title}
               onChange={e => setTitle(e.target.value)}
+              disabled={isBlocked}
             />
           </div>
         </div>
@@ -215,6 +299,7 @@ export default function Dashboard(){
               type="date"
               value={date}
               onChange={e => setDate(e.target.value)}
+              disabled={isBlocked}
             />
           </div>
           
@@ -224,6 +309,7 @@ export default function Dashboard(){
               type="time"
               value={time}
               onChange={e => setTime(e.target.value)}
+              disabled={isBlocked}
             />
           </div>
 
@@ -232,6 +318,7 @@ export default function Dashboard(){
               type="checkbox"
               id="reminder"
               checked={reminder}
+              disabled={isBlocked}
               onChange={async e => {
                 const next = e.target.checked
                 setReminder(next)
@@ -244,7 +331,9 @@ export default function Dashboard(){
           </div>
         </div>
 
-        <button className="btn-primary" onClick={add}>💾 Зберегти</button>
+        <button className="btn-primary" onClick={add} disabled={isBlocked}>
+          💾 Зберегти
+        </button>
       </div>
 
       <div className="habits-grid">
@@ -269,26 +358,39 @@ export default function Dashboard(){
         <h2>🏆 Мої досягнення</h2>
         <p className="achievement-help">
           Щоб отримати досягнення, відмітьте звичку як виконану і натисніть "✨ Поділитися".
-          Тоді адміністратор і інші користувачі зможуть побачити ваше досягнення.
+          Отримане досягнення зберігається навіть після видалення звички, але ви можете видалити його тут.
         </p>
         {myAchievements.length === 0 ? (
           <p className="no-habits">У вас поки що немає досягнень.</p>
         ) : (
-          myAchievements.map(h => (
-            <div key={h._id} className="achievement-card">
+          <div className="achievements-grid">
+            {myAchievements.map((h, idx) => (
+              <div key={h._id} className="achievement-card">
               <div className="achievement-header">
                 <div>
-                  <h3>{h.title}</h3>
+                  <h3>{getAchievementTitle(h, idx)}</h3>
                   <p className="achievement-status">
                     {h.public ? "Публічне досягнення" : "Лише для вас"}
                   </p>
                 </div>
-                <span className={`badge ${h.public ? "shared" : "private"}`}>
-                  {h.public ? "✨ Поділено" : "🔒 Приватне"}
-                </span>
+                <div className="achievement-actions">
+                  <button
+                    type="button"
+                    className="btn-danger-small"
+                    onClick={e => { e.preventDefault(); e.stopPropagation(); deleteAchievement(h._id) }}
+                    title="Видалити досягнення"
+                  >
+                    ✕
+                  </button>
+                  <span className={`badge ${h.public ? "shared" : "private"}`}>
+                    {h.public ? "✨ Поділено" : "🔒 Приватне"}
+                  </span>
+                </div>
               </div>
 
               <p className="achievement-info">
+                Звичка: {h.title}
+                <br />
                 Дата: {new Date(h.date).toLocaleDateString('uk-UA')} • Час: {h.dueTime}
               </p>
 
@@ -307,7 +409,8 @@ export default function Dashboard(){
                 </div>
               )}
             </div>
-          ))
+          ))}
+          </div>
         )}
       </div>
 
@@ -319,45 +422,49 @@ export default function Dashboard(){
         {publicAchievements.length === 0 ? (
           <p className="no-habits">Поки що нема публічних досягнень.</p>
         ) : (
-          publicAchievements.map(h => (
-            <div key={h._id} className="achievement-card">
-              <div className="achievement-header">
-                <div>
-                  <h3>{h.title}</h3>
-                  <p className="achievement-status">Від {h.user?.username || h.user?.email}</p>
+          <div className="achievements-grid">
+            {publicAchievements.map(h => (
+              <div key={h._id} className="achievement-card">
+                <div className="achievement-header">
+                  <div>
+                    <h3>🏆 Досягнення</h3>
+                    <p className="achievement-status">Від {h.user?.username || h.user?.email}</p>
+                  </div>
+                  <span className="badge shared">✨ Публічне</span>
                 </div>
-                <span className="badge shared">✨ Публічне</span>
-              </div>
 
-              <p className="achievement-info">
-                Дата: {new Date(h.date).toLocaleDateString('uk-UA')} • Час: {h.dueTime}
-              </p>
+                <p className="achievement-info">
+                  Звичка: {h.title}
+                  <br />
+                  Дата: {new Date(h.date).toLocaleDateString('uk-UA')} • Час: {h.dueTime}
+                </p>
 
-              <div className="achievement-comments">
-                <h4>Коментарі</h4>
-                {h.comments?.length === 0 ? (
-                  <p className="no-data">Поки що немає коментарів</p>
-                ) : (
-                  h.comments.map((c, idx) => (
-                    <div key={idx} className="comment-row">
-                      <strong>{c.username}</strong>: {c.text}
-                    </div>
-                  ))
-                )}
-                <div className="comment-form">
-                  <input
-                    type="text"
-                    placeholder="Залишити коментар..."
-                    value={commentText[h._id] || ""}
-                    onChange={e => setCommentText(prev => ({ ...prev, [h._id]: e.target.value }))}
-                  />
-                  <button className="btn-primary" onClick={() => addComment(h._id)}>
-                    📝 Відправити
-                  </button>
+                <div className="achievement-comments">
+                  <h4>Коментарі</h4>
+                  {h.comments?.length === 0 ? (
+                    <p className="no-data">Поки що немає коментарів</p>
+                  ) : (
+                    h.comments.map((c, idx) => (
+                      <div key={idx} className="comment-row">
+                        <strong>{c.username}</strong>: {c.text}
+                      </div>
+                    ))
+                  )}
+                  <div className="comment-form">
+                    <input
+                      type="text"
+                      placeholder="Залишити коментар..."
+                      value={commentText[h._id] || ""}
+                      onChange={e => setCommentText(prev => ({ ...prev, [h._id]: e.target.value }))}
+                    />
+                    <button className="btn-primary" onClick={() => addComment(h._id)}>
+                      📝 Відправити
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))
+            ))}
+          </div>
         )}
       </div>
     </div>

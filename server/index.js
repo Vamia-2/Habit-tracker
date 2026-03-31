@@ -14,6 +14,7 @@ import Habit from "./models/Habit.js"
 import Message from "./models/Message.js"
 import Complaint from "./models/Complaint.js"
 import auth from "./middleware/auth.js"
+import { sendPush } from "./push.js"
 
 // Читаємо .env з root директорії
 const __filename = fileURLToPath(import.meta.url)
@@ -94,18 +95,71 @@ mongoose.connect(process.env.MONGO_URI, {
       }
     }
   } catch(e) {
-    if (e.code === 11000) {
-      console.log("👑 Адміністратор вже існує (duplicate key)")
-    } else {
-      console.error("❌ Не вдалося перевірити / створити адміністратора:", e)
-    }
-  }
-})
-.catch(err=>{
-  console.error("❌ Помилка підключення MongoDB:", err.message)
-  console.error("📝 MONGO_URI:", process.env.MONGO_URI)
-  process.exit(1)
-})
+        if (e.code === 11000) {
+          console.log("👑 Адміністратор вже існує (duplicate key)")
+        } else {
+          console.error("❌ Не вдалося перевірити / створити адміністратора:", e)
+        }
+      }
+
+      const startReminderScheduler = () => {
+        const reminderWindowMs = 5 * 60 * 1000
+        const checkIntervalMs = 60 * 1000
+
+        const sendPendingReminders = async () => {
+          try {
+            const now = new Date()
+            const windowStart = new Date(now.getTime() - reminderWindowMs)
+            const windowEnd = new Date(now.getTime() + checkIntervalMs)
+
+            const habits = await Habit.find({
+              reminder: true,
+              completed: false,
+              deleted: false,
+              reminderSentAt: null
+            }).populate("user", "pushSubscription username email")
+
+            for (const habit of habits) {
+              if (!habit.user?.pushSubscription) continue
+              if (!habit.dueTime || !habit.date) continue
+
+              const dueDate = new Date(habit.date)
+              const [hours, minutes] = habit.dueTime.split(":").map(Number)
+              if (Number.isNaN(hours) || Number.isNaN(minutes)) continue
+              dueDate.setHours(hours, minutes, 0, 0)
+
+              if (dueDate < windowStart || dueDate > windowEnd) continue
+
+              const payload = {
+                title: `🔔 Нагадування: ${habit.title}`,
+                body: `Звичка запланована на ${dueDate.toLocaleDateString("uk-UA")} о ${habit.dueTime}`
+              }
+
+              try {
+                await sendPush(habit.user.pushSubscription, payload)
+                habit.reminderSentAt = new Date()
+                await habit.save()
+                console.log(`⏰ Push reminder sent for habit ${habit._id}`)
+              } catch (e) {
+                console.error("❌ Не вдалося відправити нагадування для звички:", habit._id, e)
+              }
+            }
+          } catch (e) {
+            console.error("❌ Помилка планувальника нагадувань:", e)
+          }
+        }
+
+        setInterval(sendPendingReminders, checkIntervalMs)
+        console.log("⏰ Scheduler for habit reminders started")
+      }
+
+      startReminderScheduler()
+    })
+    .catch(err => {
+      console.error("❌ Помилка підключення MongoDB:", err.message)
+      console.error("📝 MONGO_URI:", process.env.MONGO_URI)
+      process.exit(1)
+    })
 
 // ✅ SOCKET (Chat + Real-time)
 const server = http.createServer(app)
@@ -257,12 +311,33 @@ app.get("/api/habits", auth, async(req,res)=>{
   res.json(habits)
 })
 
+app.get("/api/habits/achievements", auth, async(req,res)=>{
+  const achievements = await Habit.find({user:req.user.id, completed:true, achievementDeleted:false}).sort({ completedAt: 1, date: 1 })
+  res.json(achievements)
+})
+
+app.delete("/api/achievements/:id", auth, async(req,res)=>{
+  const habit = await Habit.findById(req.params.id)
+  if(!habit) return res.status(404).json("Habit not found")
+  if(habit.user.toString() !== req.user.id) return res.status(403).json("Forbidden")
+  habit.achievementDeleted = true
+  await habit.save()
+  res.json(habit)
+})
+
 app.get("/api/habits/public", auth, async(req,res)=>{
   const habits = await Habit.find({public:true, deleted:false}).populate("user", "username email")
   res.json(habits)
 })
 
-app.post("/api/habits", auth, async(req,res)=>{
+const ensureNotBlocked = (req, res, next) => {
+  if (req.user?.isBlocked) {
+    return res.status(403).json("Ваш аккаунт тимчасово заблоковано")
+  }
+  next()
+}
+
+app.post("/api/habits", auth, ensureNotBlocked, async(req,res)=>{
   const habit = await Habit.create({
     ...req.body,
     user:req.user.id
@@ -270,7 +345,7 @@ app.post("/api/habits", auth, async(req,res)=>{
   res.json(habit)
 })
 
-app.put("/api/habits/:id", auth, async(req,res)=>{
+app.put("/api/habits/:id", auth, ensureNotBlocked, async(req,res)=>{
   const habit = await Habit.findById(req.params.id)
   if(!habit) return res.status(404).json("Habit not found")
   if(habit.user.toString() !== req.user.id) return res.status(403).json("Forbidden")
@@ -279,7 +354,7 @@ app.put("/api/habits/:id", auth, async(req,res)=>{
   res.json(habit)
 })
 
-app.post("/api/habits/:id/comment", auth, async(req,res)=>{
+app.post("/api/habits/:id/comment", auth, ensureNotBlocked, async(req,res)=>{
   const { text } = req.body
   if(!text) return res.status(400).json("Коментар не може бути порожнім")
 
@@ -297,7 +372,7 @@ app.post("/api/habits/:id/comment", auth, async(req,res)=>{
   res.json(habit)
 })
 
-app.delete("/api/habits/:id", auth, async(req,res)=>{
+app.delete("/api/habits/:id", auth, ensureNotBlocked, async(req,res)=>{
   const habit = await Habit.findById(req.params.id)
   if(!habit) return res.status(404).json("Habit not found")
   if(habit.user.toString() !== req.user.id) return res.status(403).json("Forbidden")
@@ -361,7 +436,7 @@ app.get("/api/messages/:userId", auth, async(req,res)=>{
 })
 
 // ✅ COMPLAINTS
-app.post("/api/complaint", auth, async(req,res)=>{
+app.post("/api/complaint", auth, ensureNotBlocked, async(req,res)=>{
   const { reportedUser, reportedUserEmail, reason, description, reporterEmail } = req.body
   if(!reportedUser || !reason) return res.status(400).json("Потрібні reportedUser та reason")
 
@@ -429,6 +504,48 @@ app.post("/api/admin/unblock/:userId", auth, async(req,res)=>{
     blockedUntil: null
   }, {new: true})
   res.json(user)
+})
+
+app.put("/api/admin/role/:userId", auth, async(req,res)=>{
+  if(req.user.role !== "admin") return res.sendStatus(403)
+  const { role } = req.body
+  if (!["admin", "user"].includes(role)) return res.status(400).json("Недійсна роль")
+
+  const user = await User.findByIdAndUpdate(req.params.userId, { role }, { new: true })
+  if (!user) return res.status(404).json("Користувача не знайдено")
+  res.json(user)
+})
+
+app.get("/api/push-public-key", auth, async(req,res)=>{
+  const publicKey = process.env.PUBLIC_KEY
+  if(!publicKey) return res.status(500).json("VAPID public key not configured")
+  res.json({ publicKey })
+})
+
+app.post("/api/subscribe", auth, async(req,res)=>{
+  const subscription = req.body
+  if(!subscription || !subscription.endpoint) return res.status(400).json("Invalid subscription")
+
+  await User.findByIdAndUpdate(req.user.id, { pushSubscription: subscription })
+  res.json("Subscribed")
+})
+
+app.post("/api/push/send", auth, async(req,res)=>{
+  const user = await User.findById(req.user.id)
+  if(!user?.pushSubscription) return res.status(400).json("Push subscription not found")
+
+  const payload = {
+    title: req.body.title || "Habit Tracker",
+    body: req.body.body || "Тестове push-повідомлення"
+  }
+
+  try {
+    await sendPush(user.pushSubscription, payload)
+    res.json("Push sent")
+  } catch (e) {
+    console.error("Push send error:", e)
+    res.status(500).json("Failed to send push notification")
+  }
 })
 
 app.get("/api/admin/habits-stats", auth, async(req,res)=>{

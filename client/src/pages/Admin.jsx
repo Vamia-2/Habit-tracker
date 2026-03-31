@@ -67,6 +67,17 @@ export default function Admin(){
     }
   }
 
+  const toggleRole = async (userId, currentRole) => {
+    try {
+      const newRole = currentRole === "admin" ? "user" : "admin"
+      await api.put(`/admin/role/${userId}`, { role: newRole })
+      alert(`Роль користувача змінено на ${newRole}`)
+      load()
+    } catch (e) {
+      alert("Помилка зміни ролі")
+    }
+  }
+
   const handleComplaint = async (complaintId, status) => {
     try {
       const blockDaysValue = status === "approved" ? blockDays : 0
@@ -150,6 +161,12 @@ export default function Admin(){
                   </div>
                   
                   <div className="user-actions">
+                    <button
+                      className={u.role === "admin" ? "btn-secondary" : "btn-success"}
+                      onClick={() => toggleRole(u._id, u.role)}
+                    >
+                      {u.role === "admin" ? "👤 Зробити користувачем" : "👑 Зробити адміном"}
+                    </button>
                     {u.isBlocked ? (
                       <button 
                         className="btn-success"

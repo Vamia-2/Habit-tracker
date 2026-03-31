@@ -8,6 +8,10 @@ export default mongoose.model("User", new mongoose.Schema({
   role: { type: String, default: "user" },
   isBlocked: { type: Boolean, default: false },
   blockedUntil: Date,
+  pushSubscription: {
+    type: Object,
+    default: null
+  },
   achievements: [String],
   followers: [String],
   following: [String],

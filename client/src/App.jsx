@@ -4,7 +4,7 @@ import Login from "./pages/Login.jsx"
 import Register from "./pages/Register.jsx"
 import Dashboard from "./pages/Dashboard.jsx"
 import Admin from "./pages/Admin.jsx"
-import Chat from "./pages/Chat.jsx"
+import Complaint from "./pages/Complaint.jsx"
 
 export default function App(){
   return(
@@ -14,7 +14,7 @@ export default function App(){
         <Route path="/login" element={<Login/>}/>
         <Route path="/register" element={<Register/>}/>
         <Route path="/admin" element={<Admin/>}/>
-        <Route path="/chat" element={<Chat/>}/>
+        <Route path="/complaint" element={<Complaint/>}/>
       </Routes>
     </BrowserRouter>
   )

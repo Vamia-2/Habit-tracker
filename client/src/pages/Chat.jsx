@@ -1,12 +1,13 @@
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef } from "react"
 import { io } from "socket.io-client"
 import api from "../api"
 import { useTheme } from "../ThemeContext"
 
 const socketBase = import.meta.env.VITE_API ? import.meta.env.VITE_API.replace(/\/api\/?$/, "") : "http://localhost:5000"
-const socket = io(socketBase || "http://localhost:5000")
 
 export default function Chat(){
+  const socketRef = useRef(null)
+  const selectedUserRef = useRef(null)
   const [text, setText] = useState("")
   const [messages, setMessages] = useState([])
   const [users, setUsers] = useState([])
@@ -32,10 +33,20 @@ export default function Chat(){
     }
 
     setCurrentUser(decoded.id)
-    socket.emit("join", decoded.id)
+
+    const socket = io(socketBase || "http://localhost:5000")
+    socketRef.current = socket
+
+    socket.on("connect", () => {
+      socket.emit("join", decoded.id)
+    })
+
+    socket.on("connect_error", (error) => {
+      console.error("Socket connect error:", error)
+    })
 
     socket.on("newMessage", (m) => {
-      if(m.sender === selectedUser || m.receiver === selectedUser) {
+      if(m.sender === selectedUserRef.current || m.receiver === selectedUserRef.current) {
         setMessages(prev => [...prev, m])
       }
     })
@@ -56,7 +67,17 @@ export default function Chat(){
 
     loadUsers()
 
-    return () => socket.off("newMessage")
+    return () => {
+      socket.off("newMessage")
+      socket.off("connect")
+      socket.off("connect_error")
+      socket.disconnect()
+      socketRef.current = null
+    }
+  }, [])
+
+  useEffect(() => {
+    selectedUserRef.current = selectedUser
   }, [selectedUser])
 
   // Завантажуємо історію повідомлень коли виберемо користувача
@@ -114,6 +135,12 @@ export default function Chat(){
       sender: currentUser,
       receiver: selectedUser,
       createdAt: new Date()
+    }
+
+    const socket = socketRef.current
+    if (!socket) {
+      alert("Socket не підключений. Спробуйте перезавантажити сторінку.")
+      return
     }
 
     socket.emit("sendMessage", message)
