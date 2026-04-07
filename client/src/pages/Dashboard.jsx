@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom"
 import api from "../api"
 import HabitCard from "../components/HabitCard"
 import LineChart from "../components/LineChart"
+import PushSettings, { subscribeToPushNotifications } from "../components/PushSettings"
 import { useTheme } from "../ThemeContext"
 
 export default function Dashboard(){
@@ -226,6 +227,20 @@ export default function Dashboard(){
     }
   }
 
+  const toggleComments = async (habit) => {
+    if (isBlocked) {
+      return alert(`Ви заблоковані на ${blockedDays} ${blockedDays === 1 ? 'день' : 'днів'} і не можете змінювати звички.`)
+    }
+    try {
+      await api.put(`/habits/${habit._id}`, {
+        commentsEnabled: habit.commentsEnabled === false
+      })
+      load()
+    } catch(e) {
+      alert("Не вдалося змінити налаштування коментарів")
+    }
+  }
+
   const addComment = async (habitId) => {
     if (isBlocked) {
       return alert(`Ви заблоковані на ${blockedDays} ${blockedDays === 1 ? 'день' : 'днів'} і не можете додавати коментарі.`)
@@ -252,6 +267,7 @@ export default function Dashboard(){
           <button className="btn-secondary" onClick={() => setShowAnalytics(prev => !prev)}>
             📊 Аналітика
           </button>
+          <PushSettings onSubscribed={load} />
           <button
             className="btn-secondary"
             onClick={() => {
@@ -377,6 +393,16 @@ export default function Dashboard(){
                     setReminder(false)
                     return
                   }
+
+                  if (!user?.pushSubscription) {
+                    const enablePush = window.confirm("Хочете також увімкнути push-нагадування, щоб працювало навіть коли сайт закритий?")
+                    if (enablePush) {
+                      const subscribed = await subscribeToPushNotifications()
+                      if (subscribed) {
+                        await load()
+                      }
+                    }
+                  }
                 }
                 setReminder(next)
               }}
@@ -429,6 +455,16 @@ export default function Dashboard(){
                   </p>
                 </div>
                 <div className="achievement-actions">
+                  {h.public && (
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      onClick={e => { e.preventDefault(); e.stopPropagation(); toggleComments(h) }}
+                      title={h.commentsEnabled === false ? "Увімкнути коментарі" : "Вимкнути коментарі"}
+                    >
+                      {h.commentsEnabled === false ? "💬 Увімкнути коментарі" : "🚫 Вимкнути коментарі"}
+                    </button>
+                  )}
                   <button
                     type="button"
                     className="btn-danger-small"
@@ -440,6 +476,11 @@ export default function Dashboard(){
                   <span className={`badge ${h.public ? "shared" : "private"}`}>
                     {h.public ? "✨ Поділено" : "🔒 Приватне"}
                   </span>
+                  {h.public && (
+                    <span className={`comment-status-badge ${h.commentsEnabled === false ? "off" : "on"}`}>
+                      {h.commentsEnabled === false ? "🚫 Коментарі вимкнені" : "💬 Коментарі увімкнені"}
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -485,7 +526,12 @@ export default function Dashboard(){
                     <h3>🏆 Досягнення</h3>
                     <p className="achievement-status">Від {h.user?.username || h.user?.email}</p>
                   </div>
-                  <span className="badge shared">✨ Публічне</span>
+                  <div className="achievement-actions">
+                    <span className="badge shared">✨ Публічне</span>
+                    <span className={`comment-status-badge ${h.commentsEnabled === false ? "off" : "on"}`}>
+                      {h.commentsEnabled === false ? "🚫 Коментарі вимкнені" : "💬 Коментарі увімкнені"}
+                    </span>
+                  </div>
                 </div>
 
                 <p className="achievement-info">
@@ -505,17 +551,21 @@ export default function Dashboard(){
                       </div>
                     ))
                   )}
-                  <div className="comment-form">
-                    <input
-                      type="text"
-                      placeholder="Залишити коментар..."
-                      value={commentText[h._id] || ""}
-                      onChange={e => setCommentText(prev => ({ ...prev, [h._id]: e.target.value }))}
-                    />
-                    <button className="btn-primary" onClick={() => addComment(h._id)}>
-                      📝 Відправити
-                    </button>
-                  </div>
+                  {h.commentsEnabled === false ? (
+                    <p className="no-data">Коментарі до цього досягнення вимкнені власником.</p>
+                  ) : (
+                    <div className="comment-form">
+                      <input
+                        type="text"
+                        placeholder="Залишити коментар..."
+                        value={commentText[h._id] || ""}
+                        onChange={e => setCommentText(prev => ({ ...prev, [h._id]: e.target.value }))}
+                      />
+                      <button className="btn-primary" onClick={() => addComment(h._id)}>
+                        📝 Відправити
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             ))}

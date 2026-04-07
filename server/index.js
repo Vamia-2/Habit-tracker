@@ -360,6 +360,7 @@ app.post("/api/habits/:id/comment", auth, ensureNotBlocked, async(req,res)=>{
 
   const habit = await Habit.findById(req.params.id)
   if(!habit || !habit.public || habit.deleted) return res.status(404).json("Звичка не знайдена")
+  if(habit.commentsEnabled === false) return res.status(403).json("Коментарі вимкнені власником")
 
   habit.comments.push({
     userId: req.user.id,

@@ -16,6 +16,7 @@ export default mongoose.model("Habit", new mongoose.Schema({
   streakCount: { type: Number, default: 0 },
   notes: String,
   public: { type: Boolean, default: false },
+  commentsEnabled: { type: Boolean, default: true },
   comments: [{
     userId: String,
     username: String,

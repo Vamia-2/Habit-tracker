@@ -33,19 +33,19 @@ function hasArg(name) {
 }
 
 function printHelp() {
-  console.log("Usage:")
+  console.log("Використання:")
   console.log("  node scripts/cleanup-users.js [options]")
   console.log("")
-  console.log("Options:")
-  console.log("  --email-contains <text>    Delete users where email contains text (can repeat)")
-  console.log("  --created-after <date>     Delete users created after date (YYYY-MM-DD)")
-  console.log("  --created-before <date>    Delete users created before date (YYYY-MM-DD)")
-  console.log("  --exclude-email <email>    Exclude specific email from deletion (can repeat)")
-  console.log("  --exclude-role <role>      Exclude role from deletion (can repeat, default: admin)")
-  console.log("  --dry-run                  Show what would be deleted without deleting")
-  console.log("  --help                     Show this help")
+  console.log("Опції:")
+  console.log("  --email-contains <text>    Видалити користувачів, у яких email містить text (можна кілька разів)")
+  console.log("  --created-after <date>     Видалити користувачів, створених після дати (YYYY-MM-DD)")
+  console.log("  --created-before <date>    Видалити користувачів, створених до дати (YYYY-MM-DD)")
+  console.log("  --exclude-email <email>    Виключити конкретний email з видалення (можна кілька разів)")
+  console.log("  --exclude-role <role>      Виключити роль з видалення (можна кілька разів, типово: admin)")
+  console.log("  --dry-run                  Показати, що буде видалено, без фактичного видалення")
+  console.log("  --help                     Показати цю довідку")
   console.log("")
-  console.log("Examples:")
+  console.log("Приклади:")
   console.log("  node scripts/cleanup-users.js --email-contains test --dry-run")
   console.log("  node scripts/cleanup-users.js --created-after 2026-04-01 --exclude-email admin@gmail.com")
 }
@@ -58,7 +58,7 @@ async function main() {
 
   const mongoUri = process.env.MONGO_URI
   if (!mongoUri) {
-    throw new Error("MONGO_URI is missing in .env")
+    throw new Error("У .env відсутній MONGO_URI")
   }
 
   const emailContainsList = getArgValues("--email-contains")
@@ -96,20 +96,20 @@ async function main() {
     })
 
     if (users.length === 0) {
-      console.log("No users matched the filters.")
+      console.log("Користувачів за цими фільтрами не знайдено.")
       return
     }
 
     const ids = users.map((u) => String(u._id))
 
-    console.log(`Matched users: ${users.length}`)
+    console.log(`Знайдено користувачів: ${users.length}`)
     users.slice(0, 20).forEach((u) => {
       console.log(`- ${u.email} (${u.username}) role=${u.role} createdAt=${u.createdAt.toISOString()}`)
     })
-    if (users.length > 20) console.log(`... and ${users.length - 20} more`)
+    if (users.length > 20) console.log(`... і ще ${users.length - 20}`)
 
     if (dryRun) {
-      console.log("Dry run mode: nothing deleted.")
+      console.log("Режим dry-run: нічого не видалено.")
       return
     }
 
@@ -131,18 +131,18 @@ async function main() {
       User.deleteMany({ _id: { $in: ids } })
     ])
 
-    console.log(`Deleted users: ${usersDeleted.deletedCount || 0}`)
-    console.log(`Deleted habits: ${habitsDeleted.deletedCount || 0}`)
-    console.log(`Deleted messages: ${messagesDeleted.deletedCount || 0}`)
-    console.log(`Deleted complaints: ${complaintsDeleted.deletedCount || 0}`)
-    console.log(`Updated user links: ${userLinksUpdated.modifiedCount || 0}`)
+    console.log(`Видалено користувачів: ${usersDeleted.deletedCount || 0}`)
+    console.log(`Видалено звичок: ${habitsDeleted.deletedCount || 0}`)
+    console.log(`Видалено повідомлень: ${messagesDeleted.deletedCount || 0}`)
+    console.log(`Видалено скарг: ${complaintsDeleted.deletedCount || 0}`)
+    console.log(`Оновлено зв'язків між користувачами: ${userLinksUpdated.modifiedCount || 0}`)
   } finally {
     await mongoose.disconnect()
   }
 }
 
 main().catch(async (err) => {
-  console.error("Cleanup failed:", err.message)
+  console.error("Помилка очищення:", err.message)
   try {
     await mongoose.disconnect()
   } catch {}
