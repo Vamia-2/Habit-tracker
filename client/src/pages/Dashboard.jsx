@@ -6,6 +6,20 @@ import LineChart from "../components/LineChart"
 import PushSettings, { subscribeToPushNotifications } from "../components/PushSettings"
 import { useTheme } from "../ThemeContext"
 
+const decodeJwtPayload = (token) => {
+  try {
+    const payload = token?.split(".")?.[1]
+    if (!payload) return null
+
+    const base64 = payload.replace(/-/g, "+").replace(/_/g, "/")
+    const padded = base64 + "=".repeat((4 - base64.length % 4) % 4)
+
+    return JSON.parse(window.atob(padded))
+  } catch {
+    return null
+  }
+}
+
 export default function Dashboard(){
   const [habits, setHabits] = useState([])
   const [publicHabits, setPublicHabits] = useState([])
@@ -26,21 +40,39 @@ export default function Dashboard(){
   const blockedDays = isBlocked ? Math.max(1, Math.ceil((blockedUntil - Date.now()) / (1000 * 60 * 60 * 24))) : 0
 
   const load = async () => {
+    const token = localStorage.getItem("token")
+    if (!token) {
+      navigate("/login")
+      return
+    }
+
+    const decoded = decodeJwtPayload(token)
+    if (!decoded?.id) {
+      navigate("/login")
+      return
+    }
+
     try {
-      const res = await api.get("/habits")
-      setHabits(res.data)
-      const achievementsRes = await api.get("/habits/achievements")
+      const [habitsRes, achievementsRes, publicRes, userRes] = await Promise.all([
+        api.get("/habits"),
+        api.get("/habits/achievements"),
+        api.get("/habits/public"),
+        api.get(`/user/${decoded.id}`)
+      ])
+
+      setHabits(habitsRes.data)
       setAchievements(achievementsRes.data)
-      const publicRes = await api.get("/habits/public")
       setPublicHabits(publicRes.data)
-      const token = localStorage.token
-      if (!token) throw new Error("No token")
-      const decoded = JSON.parse(atob(token.split('.')[1]))
-      const userRes = await api.get(`/user/${decoded.id}`)
       setUser(userRes.data)
     } catch(e) {
-      console.log("Not authenticated")
-      window.location.href = "/login"
+      const status = e?.response?.status
+      if (status === 401 || status === 403) {
+        console.log("Not authenticated")
+        navigate("/login")
+        return
+      }
+
+      console.error("Помилка завантаження dashboard:", e)
     }
   }
 
