@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react"
+import { useNavigate } from "react-router-dom"
 import api from "../api"
 import { useTheme } from "../ThemeContext"
 import BarChart from "../components/BarChart"
@@ -13,30 +14,40 @@ export default function Admin(){
   const [blockDays, setBlockDays] = useState(7)
   const [selectedUser, setSelectedUser] = useState(null)
   const { theme, toggleTheme } = useTheme()
+  const navigate = useNavigate()
 
   const load = async () => {
     try {
-      const token = localStorage.token
-      const decoded = JSON.parse(atob(token.split('.')[1]))
-      
-      // Перевіряємо, чи користувач є адміном
-      const userRes = await api.get(`/user/${decoded.id}`)
-      if(userRes.data.role !== "admin") {
-        window.location.href = "/"
+      const token = localStorage.getItem("token")
+      if (!token) {
+        navigate("/login")
         return
       }
 
-      const usersRes = await api.get("/admin/users")
+      const [usersRes, habitsStatsRes, complaintsRes] = await Promise.all([
+        api.get("/admin/users"),
+        api.get("/admin/habits-stats"),
+        api.get("/complaints")
+      ])
+
       setUsers(usersRes.data)
-
-      const habitsStatsRes = await api.get("/admin/habits-stats")
       setHabitsStats(habitsStatsRes.data)
-
-      const complaintsRes = await api.get("/complaints")
       setComplaints(complaintsRes.data)
     } catch(e) {
-      alert("У вас немає доступу до адмін панелі")
-      window.location.href = "/"
+      const status = e?.response?.status
+      if (status === 401) {
+        alert("Сесія завершилась. Увійдіть знову")
+        navigate("/login")
+        return
+      }
+
+      if (status === 403) {
+        alert("У вас немає доступу до адмін панелі")
+        navigate("/")
+        return
+      }
+
+      alert("Не вдалося завантажити адмін панель")
     }
   }
 
