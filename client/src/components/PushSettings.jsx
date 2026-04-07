@@ -79,7 +79,7 @@ export default function PushSettings({ onSubscribed }){
 
   return(
     <button className="btn-secondary" onClick={subscribe}>
-      {isSubscribed ? "✅ Push увімкнено" : "🔔 Увімкнути push-нагадування"}
+      {isSubscribed ? "✅ Увімкнено" : "🔔 Нагадування"}
     </button>
   )
 }

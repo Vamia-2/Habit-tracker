@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react"
+import { useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import api from "../api"
 import HabitCard from "../components/HabitCard"
@@ -18,7 +18,6 @@ export default function Dashboard(){
   const [time, setTime] = useState("09:00")
   const [reminder, setReminder] = useState(false)
   const [user, setUser] = useState(null)
-  const reminderTimeouts = useRef([])
   const { theme, toggleTheme } = useTheme()
   const navigate = useNavigate()
 
@@ -45,66 +44,12 @@ export default function Dashboard(){
     }
   }
 
-  const requestReminderPermission = async () => {
-    if (!('Notification' in window)) {
-      alert("Ваш браузер не підтримує нагадування через Notification API.")
-      return false
-    }
-
-    if (Notification.permission === 'default') {
-      const permission = await Notification.requestPermission()
-      return permission === 'granted'
-    }
-
-    if (Notification.permission === 'denied') {
-      alert("Ви відхилили повідомлення. Увімкніть сповіщення в налаштуваннях браузера.")
-      return false
-    }
-
-    return Notification.permission === 'granted'
-  }
-
-  const scheduleReminders = async (habitList) => {
-    reminderTimeouts.current.forEach(timeoutId => clearTimeout(timeoutId))
-    reminderTimeouts.current = []
-
-    if (!('Notification' in window)) return
-    if (Notification.permission === 'denied') return
-    if (Notification.permission === 'default') {
-      const granted = await requestReminderPermission()
-      if (!granted) return
-    }
-    if (Notification.permission !== 'granted') return
-
-    habitList.forEach(habit => {
-      if (!habit.reminder || habit.completed) return
-      const dueDate = new Date(habit.date)
-      const [hours, minutes] = (habit.dueTime || '09:00').split(":")
-      dueDate.setHours(Number(hours), Number(minutes), 0, 0)
-      const delay = dueDate.getTime() - Date.now()
-      if (delay <= 0) return
-
-      const timeoutId = window.setTimeout(() => {
-        new Notification(`Нагадування: ${habit.title}`, {
-          body: `Звичка запланована на ${new Date(habit.date).toLocaleDateString('uk-UA')} о ${habit.dueTime}`,
-          silent: false
-        })
-      }, delay)
-
-      reminderTimeouts.current.push(timeoutId)
-    })
-  }
-
   useEffect(() => { load() }, [])
 
   const logout = () => {
     localStorage.removeItem("token")
     navigate("/login")
   }
-
-  useEffect(() => {
-    scheduleReminders(habits)
-  }, [habits])
 
   useEffect(() => {
     const handleFocus = () => load()
@@ -388,20 +333,21 @@ export default function Dashboard(){
               onChange={async e => {
                 const next = e.target.checked
                 if (next) {
-                  const granted = await requestReminderPermission()
-                  if (!granted) {
-                    setReminder(false)
-                    return
-                  }
-
                   if (!user?.pushSubscription) {
                     const enablePush = window.confirm("Хочете також увімкнути push-нагадування, щоб працювало навіть коли сайт закритий?")
-                    if (enablePush) {
-                      const subscribed = await subscribeToPushNotifications()
-                      if (subscribed) {
-                        await load()
-                      }
+                    if (!enablePush) {
+                      alert("Для нагадувань потрібно увімкнути push-сповіщення.")
+                      setReminder(false)
+                      return
                     }
+
+                    const subscribed = await subscribeToPushNotifications()
+                    if (!subscribed) {
+                      setReminder(false)
+                      return
+                    }
+
+                    await load()
                   }
                 }
                 setReminder(next)
