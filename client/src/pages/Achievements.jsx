@@ -59,6 +59,10 @@ export default function Achievements(){
 
   const isBlocked = user?.isBlocked && user?.blockedUntil && new Date(user.blockedUntil) > new Date()
   const blockedDays = isBlocked ? Math.max(1, Math.ceil((new Date(user.blockedUntil) - Date.now()) / (1000 * 60 * 60 * 24))) : 0
+  const totalAchievements = achievements.length
+  const publicAchievements = achievements.filter(item => item.public)
+  const privateAchievements = achievements.filter(item => !item.public)
+  const commentsEnabledCount = achievements.filter(item => item.public && item.commentsEnabled !== false).length
 
   const getAchievementTitle = (habit, index) => {
     const isOverdue = habit.completedAt && new Date(habit.completedAt) > new Date(habit.date)
@@ -136,7 +140,7 @@ export default function Achievements(){
   }
 
   return (
-    <div className={`dashboard ${theme}`}>
+    <div className={`dashboard achievements-page ${theme}`}>
       <div className="dashboard-header">
         <h1>🏆 Мої досягнення</h1>
         <div className="header-controls">
@@ -146,6 +150,35 @@ export default function Achievements(){
           <button className="btn-secondary" onClick={() => navigate("/")}>← Назад</button>
         </div>
       </div>
+
+      <section className="achievement-hero">
+        <div className="achievement-hero-copy">
+          <p className="achievement-kicker">Окрема вкладка з досягненнями</p>
+          <h2>Твої перемоги зібрані в одному місці</h2>
+          <p>
+            Тут видно не просто список виконаних звичок, а повну картину прогресу: що вже поділено, що лишається приватним і де відкриті коментарі.
+          </p>
+        </div>
+
+        <div className="achievement-hero-actions">
+          <div className="achievement-pill">
+            <span>Всього</span>
+            <strong>{totalAchievements}</strong>
+          </div>
+          <div className="achievement-pill">
+            <span>Публічних</span>
+            <strong>{publicAchievements.length}</strong>
+          </div>
+          <div className="achievement-pill">
+            <span>Приватних</span>
+            <strong>{privateAchievements.length}</strong>
+          </div>
+          <div className="achievement-pill">
+            <span>З коментарями</span>
+            <strong>{commentsEnabledCount}</strong>
+          </div>
+        </div>
+      </section>
 
       {isBlocked && (
         <div className="blocked-banner">
@@ -159,7 +192,7 @@ export default function Achievements(){
       ) : (
         <div className="achievements-grid">
           {achievements.map((habit, index) => (
-            <div key={habit._id} className="achievement-card">
+            <div key={habit._id} className="achievement-card achievement-card-large">
               <div className="achievement-header">
                 <div>
                   <h3>{getAchievementTitle(habit, index)}</h3>
@@ -198,11 +231,20 @@ export default function Achievements(){
                 </div>
               </div>
 
-              <p className="achievement-info">
+              <p className="achievement-info achievement-info-compact">
                 Звичка: {habit.title}
                 <br />
                 Дата: {new Date(habit.date).toLocaleDateString('uk-UA')} • Час: {habit.dueTime}
               </p>
+
+              <div className="achievement-tags">
+                <span className={`achievement-tag ${habit.public ? "shared" : "private"}`}>
+                  {habit.public ? "✨ Публічне" : "🔒 Приватне"}
+                </span>
+                <span className={`achievement-tag ${habit.commentsEnabled === false ? "off" : "on"}`}>
+                  {habit.commentsEnabled === false ? "🚫 Коментарі вимкнені" : "💬 Коментарі увімкнені"}
+                </span>
+              </div>
 
               {habit.public && (
                 <div className="achievement-comments">
