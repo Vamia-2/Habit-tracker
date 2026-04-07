@@ -6,6 +6,7 @@ import Dashboard from "./pages/Dashboard.jsx"
 import Admin from "./pages/Admin.jsx"
 import Complaint from "./pages/Complaint.jsx"
 import Achievements from "./pages/Achievements.jsx"
+import PublicAchievements from "./pages/PublicAchievements.jsx"
 
 export default function App(){
   return(
@@ -17,6 +18,7 @@ export default function App(){
         <Route path="/admin" element={<Admin/>}/>
         <Route path="/complaint" element={<Complaint/>}/>
         <Route path="/achievements" element={<Achievements/>}/>
+        <Route path="/public-achievements" element={<PublicAchievements/>}/>
       </Routes>
     </BrowserRouter>
   )

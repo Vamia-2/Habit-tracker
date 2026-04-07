@@ -21,9 +21,7 @@ const decodeJwtPayload = (token) => {
 
 export default function Dashboard(){
   const [habits, setHabits] = useState([])
-  const [publicHabits, setPublicHabits] = useState([])
   const [achievements, setAchievements] = useState([])
-  const [commentText, setCommentText] = useState({})
   const [showAnalytics, setShowAnalytics] = useState(false)
   const [analyticsTab, setAnalyticsTab] = useState("overview")
   const [title, setTitle] = useState("")
@@ -54,16 +52,14 @@ export default function Dashboard(){
     }
 
     try {
-      const [habitsRes, achievementsRes, publicRes, userRes] = await Promise.all([
+      const [habitsRes, achievementsRes, userRes] = await Promise.all([
         api.get("/habits"),
         api.get("/habits/achievements"),
-        api.get("/habits/public"),
         api.get(`/user/${decoded.id}`)
       ])
 
       setHabits(habitsRes.data)
       setAchievements(achievementsRes.data)
-      setPublicHabits(publicRes.data)
       setUser(userRes.data)
     } catch(e) {
       const status = e?.response?.status
@@ -121,7 +117,6 @@ export default function Dashboard(){
   const myAchievements = achievements
     .slice()
     .sort((a, b) => new Date(a.completedAt || a.date) - new Date(b.completedAt || b.date))
-  const publicAchievements = publicHabits.filter(h => h.user?._id !== user?._id)
 
   const getAchievementTitle = (habit, index) => {
     const isOverdue = habit.completedAt && new Date(habit.completedAt) > new Date(habit.date)
@@ -241,21 +236,6 @@ export default function Dashboard(){
     }
   }
 
-  const addComment = async (habitId) => {
-    if (isBlocked) {
-      return alert(`Ви заблоковані на ${blockedDays} ${blockedDays === 1 ? 'день' : 'днів'} і не можете додавати коментарі.`)
-    }
-    const text = commentText[habitId]
-    if(!text) return
-    try {
-      await api.post(`/habits/${habitId}/comment`, { text })
-      setCommentText(prev => ({ ...prev, [habitId]: "" }))
-      load()
-    } catch(e) {
-      alert("Не вдалося додати коментар")
-    }
-  }
-
   const openComplaintPage = () => {
     setMenuOpen(false)
     if (isBlocked) {
@@ -273,6 +253,11 @@ export default function Dashboard(){
   const openAchievementsPage = () => {
     setMenuOpen(false)
     navigate("/achievements")
+  }
+
+  const openPublicAchievementsPage = () => {
+    setMenuOpen(false)
+    navigate("/public-achievements")
   }
 
   const handleThemeToggle = () => {
@@ -336,13 +321,16 @@ export default function Dashboard(){
             {menuOpen && (
               <div className="menu-dropdown menu-dropdown-open" role="menu">
                 <button className="menu-item" onClick={handleThemeToggle}>
-                  {theme === "dark" ? "🌙 Темна тема" : theme === "light" ? "☀️ Світла тема" : "🎨 Синя тема"}
+                  {theme === "dark" ? "🌙 Темна тема" : theme === "light" ? "☀️ Світла тема" : "🎨 Кольорова тема"}
                 </button>
                 <button className="menu-item" onClick={() => { setMenuOpen(false); setShowAnalytics(prev => !prev) }}>
                   📊 Аналітика
                 </button>
                 <button className="menu-item" onClick={openAchievementsPage}>
                   🏆 Досягнення
+                </button>
+                <button className="menu-item" onClick={openPublicAchievementsPage}>
+                  🌍 Публічні досягнення
                 </button>
                 <button className="menu-item" onClick={openComplaintPage} disabled={isBlocked}>
                   🚨 Скарга
@@ -487,144 +475,6 @@ export default function Dashboard(){
         )}
       </div>
 
-      <div className="achievements-section">
-        <h2>🏆 Мої досягнення</h2>
-        <p className="achievement-help">
-          Щоб отримати досягнення, відмітьте звичку як виконану і натисніть "✨ Поділитися".
-          Отримане досягнення зберігається навіть після видалення звички, але ви можете видалити його тут.
-        </p>
-        {myAchievements.length === 0 ? (
-          <p className="no-habits">У вас поки що немає досягнень.</p>
-        ) : (
-          <div className="achievements-grid">
-            {myAchievements.map((h, idx) => (
-              <div key={h._id} className="achievement-card">
-              <div className="achievement-header">
-                <div>
-                  <h3>{getAchievementTitle(h, idx)}</h3>
-                  <p className="achievement-note">{getAchievementSubtitle(h, idx)}</p>
-                  <p className="achievement-status">
-                    {h.public ? "Публічне досягнення" : "Лише для вас"}
-                  </p>
-                </div>
-                <div className="achievement-actions">
-                  {h.public && (
-                    <button
-                      type="button"
-                      className="btn-secondary"
-                      onClick={e => { e.preventDefault(); e.stopPropagation(); toggleComments(h) }}
-                      title={h.commentsEnabled === false ? "Увімкнути коментарі" : "Вимкнути коментарі"}
-                    >
-                      {h.commentsEnabled === false ? "💬 Увімкнути коментарі" : "🚫 Вимкнути коментарі"}
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    className="btn-danger-small"
-                    onClick={e => { e.preventDefault(); e.stopPropagation(); deleteAchievement(h._id) }}
-                    title="Видалити досягнення"
-                  >
-                    ✕
-                  </button>
-                  <span className={`badge ${h.public ? "shared" : "private"}`}>
-                    {h.public ? "✨ Поділено" : "🔒 Приватне"}
-                  </span>
-                  {h.public && (
-                    <span className={`comment-status-badge ${h.commentsEnabled === false ? "off" : "on"}`}>
-                      {h.commentsEnabled === false ? "🚫 Коментарі вимкнені" : "💬 Коментарі увімкнені"}
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              <p className="achievement-info">
-                Звичка: {h.title}
-                <br />
-                Дата: {new Date(h.date).toLocaleDateString('uk-UA')} • Час: {h.dueTime}
-              </p>
-
-              {h.public && (
-                <div className="achievement-comments">
-                  <h4>Коментарі</h4>
-                  {h.comments?.length === 0 ? (
-                    <p className="no-data">Поки що немає коментарів</p>
-                  ) : (
-                    h.comments.map((c, idx) => (
-                      <div key={idx} className="comment-row">
-                        <strong>{c.username}</strong>: {c.text}
-                      </div>
-                    ))
-                  )}
-                </div>
-              )}
-            </div>
-          ))}
-          </div>
-        )}
-      </div>
-
-      <div className="achievements-section">
-        <h2>🌍 Публічні досягнення інших</h2>
-        <p className="achievement-help">
-          Тут ви можете коментувати досягнення інших користувачів.
-        </p>
-        {publicAchievements.length === 0 ? (
-          <p className="no-habits">Поки що нема публічних досягнень.</p>
-        ) : (
-          <div className="achievements-grid">
-            {publicAchievements.map(h => (
-              <div key={h._id} className="achievement-card">
-                <div className="achievement-header">
-                  <div>
-                    <h3>🏆 Досягнення</h3>
-                    <p className="achievement-status">Від {h.user?.username || h.user?.email}</p>
-                  </div>
-                  <div className="achievement-actions">
-                    <span className="badge shared">✨ Публічне</span>
-                    <span className={`comment-status-badge ${h.commentsEnabled === false ? "off" : "on"}`}>
-                      {h.commentsEnabled === false ? "🚫 Коментарі вимкнені" : "💬 Коментарі увімкнені"}
-                    </span>
-                  </div>
-                </div>
-
-                <p className="achievement-info">
-                  Звичка: {h.title}
-                  <br />
-                  Дата: {new Date(h.date).toLocaleDateString('uk-UA')} • Час: {h.dueTime}
-                </p>
-
-                <div className="achievement-comments">
-                  <h4>Коментарі</h4>
-                  {h.comments?.length === 0 ? (
-                    <p className="no-data">Поки що немає коментарів</p>
-                  ) : (
-                    h.comments.map((c, idx) => (
-                      <div key={idx} className="comment-row">
-                        <strong>{c.username}</strong>: {c.text}
-                      </div>
-                    ))
-                  )}
-                  {h.commentsEnabled === false ? (
-                    <p className="no-data">Коментарі до цього досягнення вимкнені власником.</p>
-                  ) : (
-                    <div className="comment-form">
-                      <input
-                        type="text"
-                        placeholder="Залишити коментар..."
-                        value={commentText[h._id] || ""}
-                        onChange={e => setCommentText(prev => ({ ...prev, [h._id]: e.target.value }))}
-                      />
-                      <button className="btn-primary" onClick={() => addComment(h._id)}>
-                        📝 Відправити
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
     </div>
   )
 }
