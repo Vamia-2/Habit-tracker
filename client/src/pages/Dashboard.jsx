@@ -1,9 +1,8 @@
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import api from "../api"
 import HabitCard from "../components/HabitCard"
 import LineChart from "../components/LineChart"
-import PushSettings, { subscribeToPushNotifications } from "../components/PushSettings"
 import { useTheme } from "../ThemeContext"
 
 const decodeJwtPayload = (token) => {
@@ -32,6 +31,8 @@ export default function Dashboard(){
   const [time, setTime] = useState("09:00")
   const [reminder, setReminder] = useState(false)
   const [user, setUser] = useState(null)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const menuRef = useRef(null)
   const { theme, toggleTheme } = useTheme()
   const navigate = useNavigate()
 
@@ -87,6 +88,28 @@ export default function Dashboard(){
     const handleFocus = () => load()
     window.addEventListener("focus", handleFocus)
     return () => window.removeEventListener("focus", handleFocus)
+  }, [])
+
+  useEffect(() => {
+    const handleOutsideClick = (event) => {
+      if (menuRef.current && !menuRef.current.contains(event.target)) {
+        setMenuOpen(false)
+      }
+    }
+
+    const handleEscape = (event) => {
+      if (event.key === "Escape") {
+        setMenuOpen(false)
+      }
+    }
+
+    document.addEventListener("mousedown", handleOutsideClick)
+    document.addEventListener("keydown", handleEscape)
+
+    return () => {
+      document.removeEventListener("mousedown", handleOutsideClick)
+      document.removeEventListener("keydown", handleEscape)
+    }
   }, [])
 
   const completedCount = habits.filter(h => h.completed).length
@@ -233,35 +256,100 @@ export default function Dashboard(){
     }
   }
 
+  const openComplaintPage = () => {
+    setMenuOpen(false)
+    if (isBlocked) {
+      alert(`Ви заблоковані на ${blockedDays} ${blockedDays === 1 ? 'день' : 'днів'}. Ви не можете подавати скаргу.`)
+      return
+    }
+    navigate("/complaint")
+  }
+
+  const openAdminPage = () => {
+    setMenuOpen(false)
+    navigate("/admin")
+  }
+
+  const handleThemeToggle = () => {
+    setMenuOpen(false)
+    toggleTheme()
+  }
+
+  const handleReminderChange = async (event) => {
+    const next = event.target.checked
+
+    if (next && !user?.pushSubscription) {
+      const enablePush = window.confirm("Щоб нагадування працювало, потрібно увімкнути push-сповіщення. Увімкнути зараз?")
+      if (!enablePush) {
+        alert("Для нагадувань потрібно увімкнути push-сповіщення.")
+        setReminder(false)
+        return
+      }
+
+      try {
+        const { subscribeToPushNotifications } = await import("../components/PushSettings")
+        const subscribed = await subscribeToPushNotifications()
+        if (!subscribed) {
+          setReminder(false)
+          return
+        }
+
+        await load()
+      } catch (error) {
+        console.error(error)
+        setReminder(false)
+        return
+      }
+    }
+
+    setReminder(next)
+  }
+
+  const handleLogout = () => {
+    setMenuOpen(false)
+    logout()
+  }
+
   return (
     <div className={`dashboard ${theme}`}>
       <div className="dashboard-header">
         <h1>🎯 My Habits</h1>
         <div className="header-controls">
-          <button className="theme-toggle" onClick={toggleTheme}>
-            {theme === "dark" ? "🌙" : theme === "light" ? "☀️" : "🎨"}
-          </button>
-          <button className="btn-secondary" onClick={() => setShowAnalytics(prev => !prev)}>
-            📊 Аналітика
-          </button>
-          <PushSettings onSubscribed={load} />
-          <button
-            className="btn-secondary"
-            onClick={() => {
-              if (isBlocked) {
-                alert(`Ви заблоковані на ${blockedDays} ${blockedDays === 1 ? 'день' : 'днів'}. Ви не можете подавати скаргу.`)
-                return
-              }
-              navigate("/complaint")
-            }}
-            disabled={isBlocked}
-          >
-            🚨 Скарга
-          </button>
-          <a className="btn-secondary" href="/admin">⚙️ Admin</a>
-          <button className="btn-danger" onClick={logout}>
-            🔓 Вихід
-          </button>
+          <div className="menu-wrap" ref={menuRef}>
+            <button
+              className={`menu-toggle ${menuOpen ? "active" : ""}`}
+              onClick={() => setMenuOpen(prev => !prev)}
+              aria-label="Відкрити меню"
+              aria-expanded={menuOpen}
+              aria-haspopup="menu"
+            >
+              <span></span>
+              <span></span>
+              <span></span>
+            </button>
+
+            {menuOpen && (
+              <div className="menu-dropdown menu-dropdown-open" role="menu">
+                <button className="menu-item" onClick={handleThemeToggle}>
+                  {theme === "dark" ? "🌙 Темна тема" : theme === "light" ? "☀️ Світла тема" : "🎨 Синя тема"}
+                </button>
+                <button className="menu-item" onClick={() => { setMenuOpen(false); setShowAnalytics(prev => !prev) }}>
+                  📊 Аналітика
+                </button>
+                <button className="menu-item" onClick={openComplaintPage} disabled={isBlocked}>
+                  🚨 Скарга
+                </button>
+                {user?.role === "admin" && (
+                  <button className="menu-item" onClick={openAdminPage}>
+                    ⚙️ Адмін
+                  </button>
+                )}
+                <button className="menu-item danger" onClick={handleLogout}>
+                  🔓 Вихід
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -362,28 +450,7 @@ export default function Dashboard(){
               id="reminder"
               checked={reminder}
               disabled={isBlocked}
-              onChange={async e => {
-                const next = e.target.checked
-                if (next) {
-                  if (!user?.pushSubscription) {
-                    const enablePush = window.confirm("Хочете також увімкнути push-нагадування, щоб працювало навіть коли сайт закритий?")
-                    if (!enablePush) {
-                      alert("Для нагадувань потрібно увімкнути push-сповіщення.")
-                      setReminder(false)
-                      return
-                    }
-
-                    const subscribed = await subscribeToPushNotifications()
-                    if (!subscribed) {
-                      setReminder(false)
-                      return
-                    }
-
-                    await load()
-                  }
-                }
-                setReminder(next)
-              }}
+              onChange={handleReminderChange}
             />
             <label htmlFor="reminder">🔔 Нагадувати</label>
           </div>
