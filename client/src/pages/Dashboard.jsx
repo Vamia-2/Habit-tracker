@@ -33,7 +33,6 @@ export default function Dashboard(){
   const [user, setUser] = useState(null)
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useRef(null)
-  const achievementsRef = useRef(null)
   const { theme, toggleTheme } = useTheme()
   const navigate = useNavigate()
 
@@ -271,9 +270,9 @@ export default function Dashboard(){
     navigate("/admin")
   }
 
-  const scrollToAchievements = () => {
+  const openAchievementsPage = () => {
     setMenuOpen(false)
-    achievementsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
+    navigate("/achievements")
   }
 
   const handleThemeToggle = () => {
@@ -342,7 +341,7 @@ export default function Dashboard(){
                 <button className="menu-item" onClick={() => { setMenuOpen(false); setShowAnalytics(prev => !prev) }}>
                   📊 Аналітика
                 </button>
-                <button className="menu-item" onClick={scrollToAchievements}>
+                <button className="menu-item" onClick={openAchievementsPage}>
                   🏆 Досягнення
                 </button>
                 <button className="menu-item" onClick={openComplaintPage} disabled={isBlocked}>
@@ -488,7 +487,7 @@ export default function Dashboard(){
         )}
       </div>
 
-      <div className="achievements-section" ref={achievementsRef}>
+      <div className="achievements-section">
         <h2>🏆 Мої досягнення</h2>
         <p className="achievement-help">
           Щоб отримати досягнення, відмітьте звичку як виконану і натисніть "✨ Поділитися".
