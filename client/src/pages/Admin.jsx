@@ -98,13 +98,10 @@ export default function Admin(){
     }
   }
 
-  const deleteUser = async (userId, userLabel) => {
-    const confirmed = window.confirm(`Видалити користувача ${userLabel}? Цю дію неможливо скасувати.`)
-    if (!confirmed) return
+  const deleteUser = async (userId) => {
 
     try {
       await api.delete(`/admin/user/${userId}`)
-      alert("Користувача видалено")
       load()
     } catch (e) {
       alert("Не вдалося видалити користувача")
