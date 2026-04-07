@@ -98,6 +98,19 @@ export default function Admin(){
     }
   }
 
+  const deleteUser = async (userId, userLabel) => {
+    const confirmed = window.confirm(`Видалити користувача ${userLabel}? Цю дію неможливо скасувати.`)
+    if (!confirmed) return
+
+    try {
+      await api.delete(`/admin/user/${userId}`)
+      alert("Користувача видалено")
+      load()
+    } catch (e) {
+      alert("Не вдалося видалити користувача")
+    }
+  }
+
   return (
     <div className={`admin-page ${theme}`}>
       <div className="admin-container">
@@ -172,6 +185,12 @@ export default function Admin(){
                       onClick={() => toggleRole(u._id, u.role)}
                     >
                       {u.role === "admin" ? "👤 Зробити користувачем" : "👑 Зробити адміном"}
+                    </button>
+                    <button
+                      className="btn-danger"
+                      onClick={() => deleteUser(u._id, u.username || u.email)}
+                    >
+                      🗑️ Видалити
                     </button>
                     {u.isBlocked ? (
                       <button 

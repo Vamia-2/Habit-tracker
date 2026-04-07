@@ -522,6 +522,33 @@ app.put("/api/admin/role/:userId", auth, async(req,res)=>{
   res.json(user)
 })
 
+app.delete("/api/admin/user/:userId", auth, async(req,res)=>{
+  if(req.user.role !== "admin") return res.sendStatus(403)
+  if(req.user.id === req.params.userId) return res.status(400).json("Неможливо видалити власний акаунт")
+
+  const user = await User.findById(req.params.userId)
+  if(!user) return res.status(404).json("Користувача не знайдено")
+
+  await Promise.all([
+    Habit.deleteMany({ user: req.params.userId }),
+    Message.deleteMany({
+      $or: [
+        { sender: req.params.userId },
+        { receiver: req.params.userId }
+      ]
+    }),
+    Complaint.deleteMany({
+      $or: [
+        { reporter: req.params.userId },
+        { reportedUser: req.params.userId }
+      ]
+    }),
+    User.findByIdAndDelete(req.params.userId)
+  ])
+
+  res.json({ message: "Користувача та пов'язані дані видалено" })
+})
+
 app.get("/api/push-public-key", auth, async(req,res)=>{
   const publicKey = process.env.PUBLIC_KEY
   if(!publicKey) return res.status(500).json("VAPID public key not configured")
