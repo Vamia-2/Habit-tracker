@@ -116,10 +116,29 @@ export default function Achievements(){
     return completed <= due
   }).length
 
+  const overdueWins = achievements.filter((habit) => {
+    const due = parseDueDate(habit)
+    const completed = habit.completedAt ? new Date(habit.completedAt) : null
+    if (!due || !completed || Number.isNaN(completed.getTime())) return false
+    return completed > due
+  }).length
+
   const morningWins = achievements.filter((habit) => {
     if (!habit.dueTime || typeof habit.dueTime !== "string") return false
     const [hours] = habit.dueTime.split(":").map(Number)
     return !Number.isNaN(hours) && hours < 10
+  }).length
+
+  const eveningWins = achievements.filter((habit) => {
+    if (!habit.dueTime || typeof habit.dueTime !== "string") return false
+    const [hours] = habit.dueTime.split(":").map(Number)
+    return !Number.isNaN(hours) && hours >= 18
+  }).length
+
+  const middayWins = achievements.filter((habit) => {
+    if (!habit.dueTime || typeof habit.dueTime !== "string") return false
+    const [hours] = habit.dueTime.split(":").map(Number)
+    return !Number.isNaN(hours) && hours >= 10 && hours < 18
   }).length
 
   const weekendWins = achievements.filter((habit) => {
@@ -128,6 +147,68 @@ export default function Achievements(){
     const day = date.getDay()
     return day === 0 || day === 6
   }).length
+
+  const totalCommentsReceived = achievements.reduce((sum, item) => sum + (item.comments?.length || 0), 0)
+  const noCommentPublicCount = achievements.filter(item => item.public && item.commentsEnabled === false).length
+
+  const completionDaysMap = achievements.reduce((acc, habit) => {
+    const dayKey = toDayKey(habit.completedAt || habit.date)
+    if (!dayKey) return acc
+    acc[dayKey] = (acc[dayKey] || 0) + 1
+    return acc
+  }, {})
+
+  const highOutputDays = Object.values(completionDaysMap).filter(count => count >= 2).length
+  const intenseDays = Object.values(completionDaysMap).filter(count => count >= 3).length
+  const maxDailyCompletions = Object.values(completionDaysMap).length > 0 ? Math.max(...Object.values(completionDaysMap)) : 0
+
+  const uniqueTitleCount = new Set(achievements.map(item => item.title?.trim()).filter(Boolean)).size
+  const uniqueMonthsActive = new Set(
+    achievements
+      .map(item => {
+        const date = new Date(item.completedAt || item.date)
+        if (Number.isNaN(date.getTime())) return null
+        return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`
+      })
+      .filter(Boolean)
+  ).size
+
+  const weekDayWins = achievements.filter((habit) => {
+    const date = new Date(habit.completedAt || habit.date)
+    if (Number.isNaN(date.getTime())) return false
+    const day = date.getDay()
+    return day >= 1 && day <= 5
+  }).length
+
+  const nightWins = achievements.filter((habit) => {
+    if (!habit.dueTime || typeof habit.dueTime !== "string") return false
+    const [hours] = habit.dueTime.split(":").map(Number)
+    return !Number.isNaN(hours) && hours < 6
+  }).length
+
+  const now = new Date()
+  const weekStart = new Date(now)
+  weekStart.setDate(now.getDate() - 7)
+  weekStart.setHours(0, 0, 0, 0)
+
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
+
+  const recentWeekWins = achievements.filter((habit) => {
+    const completed = new Date(habit.completedAt || habit.date)
+    if (Number.isNaN(completed.getTime())) return false
+    return completed >= weekStart
+  }).length
+
+  const currentMonthWins = achievements.filter((habit) => {
+    const completed = new Date(habit.completedAt || habit.date)
+    if (Number.isNaN(completed.getTime())) return false
+    return completed >= monthStart
+  }).length
+
+  const paceRate = totalAchievements ? Math.round((dueSoonWins / totalAchievements) * 100) : 0
+  const sharedRatio = totalAchievements ? Math.round((publicAchievements.length / totalAchievements) * 100) : 0
+
+  const timeWindowTypes = [morningWins > 0, middayWins > 0, eveningWins > 0].filter(Boolean).length
 
   const longestStreak = getLongestStreak(achievements)
 
@@ -139,12 +220,47 @@ export default function Achievements(){
     totalAchievements >= 50 && { id: "fifty", icon: "👑", title: "Легенда звичок", subtitle: "50+ досягнень — вражаюча стабільність." },
     longestStreak >= 3 && { id: "streak-3", icon: "🔥", title: "Серія 3+", subtitle: `Найдовша серія: ${longestStreak} дні.` },
     longestStreak >= 7 && { id: "streak-7", icon: "💥", title: "Нестримний тиждень", subtitle: `Ти тримав серію ${longestStreak} днів.` },
+    longestStreak >= 14 && { id: "streak-14", icon: "⚡", title: "Двотижневий ривок", subtitle: `Серія ${longestStreak} днів без зупинки.` },
+    longestStreak >= 30 && { id: "streak-30", icon: "🧱", title: "Місяць дисципліни", subtitle: `Серія ${longestStreak} днів — дуже сильний рівень.` },
     dueSoonWins >= 5 && { id: "on-time", icon: "⏱️", title: "Пунктуальність", subtitle: `${dueSoonWins} звичок виконано вчасно.` },
+    dueSoonWins >= 15 && { id: "on-time-pro", icon: "🕰️", title: "Тайм-майстер", subtitle: `${dueSoonWins} вчасних виконань поспіль у статистиці.` },
+    paceRate >= 80 && { id: "pace-80", icon: "🎯", title: "Точний темп", subtitle: `${paceRate}% звичок виконано без прострочення.` },
+    overdueWins >= 3 && dueSoonWins >= 3 && { id: "comeback", icon: "🛠️", title: "Повернення в ритм", subtitle: "Після затримок ти вирівняв темп і знову в грі." },
     publicAchievements.length >= 1 && { id: "shared-first", icon: "✨", title: "Відкритий старт", subtitle: "Ти поділився першим публічним досягненням." },
     publicAchievements.length >= 5 && { id: "shared-pro", icon: "🌍", title: "Голос спільноти", subtitle: `${publicAchievements.length} публічних досягнень.` },
+    publicAchievements.length >= 10 && { id: "shared-10", icon: "📣", title: "Вплив у спільноті", subtitle: `Вже ${publicAchievements.length} публічних досягнень.` },
+    privateAchievements.length >= 10 && { id: "focus-private", icon: "🧠", title: "Тихий фокус", subtitle: `${privateAchievements.length} приватних досягнень для особистого росту.` },
     commentsEnabledCount >= 3 && { id: "comments-on", icon: "💬", title: "Діалог відкрито", subtitle: `${commentsEnabledCount} досягнень з відкритими коментарями.` },
+    totalCommentsReceived >= 5 && { id: "feedback-5", icon: "🗨️", title: "Зворотний зв'язок", subtitle: `Твої досягнення отримали ${totalCommentsReceived} коментарів.` },
+    totalCommentsReceived >= 15 && { id: "feedback-15", icon: "📬", title: "Центр уваги", subtitle: `${totalCommentsReceived} коментарів від спільноти.` },
     morningWins >= 3 && { id: "morning", icon: "🌅", title: "Ранній драйв", subtitle: `${morningWins} звичок у ранковий час.` },
+    morningWins >= 10 && { id: "morning-10", icon: "☀️", title: "Ранкова рутина", subtitle: `${morningWins} ранкових перемог.` },
+    middayWins >= 5 && { id: "midday", icon: "🌞", title: "Денний темп", subtitle: `${middayWins} виконань у денний час.` },
+    eveningWins >= 5 && { id: "evening", icon: "🌙", title: "Вечірній режим", subtitle: `${eveningWins} результатів після 18:00.` },
+    timeWindowTypes === 3 && { id: "all-day", icon: "🧭", title: "Гнучкий графік", subtitle: "Ти тримаєш ритм вранці, вдень і ввечері." },
     weekendWins >= 3 && { id: "weekend", icon: "🎯", title: "Вихідні без пауз", subtitle: `${weekendWins} виконань у вихідні.` }
+    , weekendWins >= 10 && { id: "weekend-10", icon: "🏕️", title: "Чемпіон вихідних", subtitle: `${weekendWins} звичок закрито у вихідні.` }
+    , highOutputDays >= 3 && { id: "double-days", icon: "📚", title: "Продуктивні дні", subtitle: `${highOutputDays} днів із 2+ виконаними звичками.` }
+    , intenseDays >= 2 && { id: "intense-days", icon: "🚴", title: "Інтенсив", subtitle: `${intenseDays} днів із 3+ закритими звичками.` }
+    , uniqueTitleCount >= 8 && { id: "variety-8", icon: "🧩", title: "Різнобічний розвиток", subtitle: `${uniqueTitleCount} різних типів звичок у досягненнях.` }
+    , uniqueTitleCount >= 15 && { id: "variety-15", icon: "🗺️", title: "Широкий горизонт", subtitle: `${uniqueTitleCount} унікальних звичок у твоїй системі.` }
+    , recentWeekWins >= 5 && { id: "weekly-burst", icon: "📆", title: "Сильний тиждень", subtitle: `${recentWeekWins} досягнень за останні 7 днів.` }
+    , currentMonthWins >= 12 && { id: "month-engine", icon: "🏎️", title: "Двигун місяця", subtitle: `${currentMonthWins} досягнень у поточному місяці.` }
+    , totalAchievements >= 75 && { id: "pioneer-75", icon: "🦾", title: "Супер стабільність", subtitle: "75+ досягнень: ти тримаєш дуже високий рівень." }
+    , totalAchievements >= 100 && { id: "century-100", icon: "💎", title: "Клуб 100", subtitle: "100+ досягнень. Це вже система, а не випадковість." }
+    , longestStreak >= 60 && { id: "streak-60", icon: "🌋", title: "Вулкан дисципліни", subtitle: `Серія ${longestStreak} днів без пауз.` }
+    , paceRate >= 95 && totalAchievements >= 10 && { id: "pace-95", icon: "🧠", title: "Ідеальна точність", subtitle: `${paceRate}% завдань виконано вчасно.` }
+    , dueSoonWins >= 30 && { id: "on-time-30", icon: "⌛", title: "Без затримок", subtitle: `${dueSoonWins} вчасних виконань у твоїй історії.` }
+    , nightWins >= 3 && { id: "night-owl", icon: "🦉", title: "Нічний фокус", subtitle: `${nightWins} звичок із часом до 06:00.` }
+    , weekDayWins >= 10 && { id: "weekday-warrior", icon: "💼", title: "Робочий ритм", subtitle: `${weekDayWins} виконань у будні дні.` }
+    , uniqueMonthsActive >= 3 && { id: "months-3", icon: "🗓️", title: "Сезон прогресу", subtitle: `Активність уже в ${uniqueMonthsActive} різних місяцях.` }
+    , uniqueMonthsActive >= 6 && { id: "months-6", icon: "📅", title: "Піврічна інерція", subtitle: `${uniqueMonthsActive} місяців стабільного руху.` }
+    , maxDailyCompletions >= 4 && { id: "daily-peak", icon: "🏔️", title: "Пік дня", subtitle: `Максимум за день: ${maxDailyCompletions} виконаних звичок.` }
+    , sharedRatio >= 30 && sharedRatio <= 70 && totalAchievements >= 10 && { id: "share-balance", icon: "⚖️", title: "Баланс приватності", subtitle: `${sharedRatio}% досягнень публічні — збалансований профіль.` }
+    , noCommentPublicCount >= 5 && { id: "comment-guardian", icon: "🛡️", title: "Контроль дискусії", subtitle: `${noCommentPublicCount} публічних досягнень із вимкненими коментарями.` }
+    , totalCommentsReceived >= 30 && { id: "audience-30", icon: "🎤", title: "В центрі уваги", subtitle: `${totalCommentsReceived} коментарів до твоїх досягнень.` }
+    , recentWeekWins >= 10 && { id: "weekly-fire-10", icon: "🔥", title: "Гарячий тиждень", subtitle: `${recentWeekWins} досягнень лише за 7 днів.` }
+    , currentMonthWins >= 20 && { id: "month-master-20", icon: "🚀", title: "Темп місяця", subtitle: `${currentMonthWins} досягнень у цьому місяці.` }
   ].filter(Boolean)
 
   const getAchievementTitle = (habit, index) => {

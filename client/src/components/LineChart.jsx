@@ -10,7 +10,6 @@ import {
 
 import { Line } from "react-chartjs-2"
 
-// 🔥 реєстрація
 ChartJS.register(
   LineElement,
   CategoryScale,
@@ -22,14 +21,14 @@ ChartJS.register(
 
 export default function LineChart({ habits }) {
 
-  // 📅 останні 7 днів
+
   const days = [...Array(7)].map((_, i) => {
     const d = new Date()
     d.setDate(d.getDate() - i)
     return d.toISOString().slice(0, 10)
   }).reverse()
 
-  // 📊 рахуємо активність
+
   const data = {
     labels: days,
     datasets: [
@@ -39,7 +38,7 @@ export default function LineChart({ habits }) {
           habits.filter(h => h.completedDates.includes(day)).length
         ),
 
-        // 🎨 стиль
+
         borderColor: "#3b82f6",
         backgroundColor: "rgba(59,130,246,0.3)",
         tension: 0.4,
@@ -49,7 +48,7 @@ export default function LineChart({ habits }) {
     ]
   }
 
-  // ⚙️ налаштування
+
   const options = {
     responsive: true,
     plugins: {

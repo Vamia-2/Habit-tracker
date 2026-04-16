@@ -28,14 +28,12 @@ export default function BarChart({ habits }) {
         label: "Виконання звичок",
         data: habits.map(h => h.completedDates.length),
 
-        // 🎨 стиль (як Fitbit)
         backgroundColor: "rgba(59, 130, 246, 0.7)",
         borderRadius: 10
       }
     ]
   }
 
-  // ⚙️ налаштування
   const options = {
     responsive: true,
     plugins: {
