@@ -267,8 +267,9 @@ export default function Dashboard(){
 
   const handleReminderChange = async (event) => {
     const next = event.target.checked
+    const hasPushSubscription = Boolean(user?.hasPushSubscription || user?.pushSubscription)
 
-    if (next && !user?.pushSubscription) {
+    if (next && !hasPushSubscription) {
       const enablePush = window.confirm("Щоб нагадування працювало, потрібно увімкнути push-сповіщення. Увімкнути зараз?")
       if (!enablePush) {
         alert("Для нагадувань потрібно увімкнути push-сповіщення.")

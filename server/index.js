@@ -155,6 +155,7 @@ mongoose.connect(process.env.MONGO_URI, {
         }
 
         setInterval(sendPendingReminders, checkIntervalMs)
+        sendPendingReminders()
         console.log("⏰ Scheduler for habit reminders started")
       }
 
@@ -292,9 +293,20 @@ app.get("/api/user/:id", auth, async(req,res)=>{
   if (!isValidObjectId(req.params.id)) return res.status(400).json("Некоректний id користувача")
   if (req.user.id !== req.params.id && req.user.role !== "admin") return res.sendStatus(403)
 
-  const user = await User.findById(req.params.id).select("email username avatar role isBlocked blockedUntil createdAt")
+  const user = await User.findById(req.params.id).select("email username avatar role isBlocked blockedUntil createdAt pushSubscription")
   if(!user) return res.status(404).json("No user")
-  res.json(user)
+
+  res.json({
+    id: user._id,
+    email: user.email,
+    username: user.username,
+    avatar: user.avatar,
+    role: user.role,
+    isBlocked: user.isBlocked,
+    blockedUntil: user.blockedUntil,
+    createdAt: user.createdAt,
+    hasPushSubscription: Boolean(user.pushSubscription)
+  })
 })
 
 app.put("/api/user", auth, async(req,res)=>{
@@ -409,6 +421,18 @@ app.put("/api/habits/:id", auth, ensureNotBlocked, async(req,res)=>{
 
   if (Object.keys(allowedUpdates).length === 0) {
     return res.status(400).json("Немає дозволених полів для оновлення")
+  }
+
+  const reminderConfigTouched = ["date", "dueTime", "reminder"].some((key) =>
+    Object.prototype.hasOwnProperty.call(allowedUpdates, key)
+  )
+
+  if (reminderConfigTouched) {
+    allowedUpdates.reminderSentAt = null
+  }
+
+  if (Object.prototype.hasOwnProperty.call(allowedUpdates, "completed")) {
+    allowedUpdates.reminderSentAt = allowedUpdates.completed ? new Date() : null
   }
 
   Object.assign(habit, allowedUpdates)

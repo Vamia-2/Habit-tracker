@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import axios from "axios"
+import api from "../api"
 
 const urlBase64ToUint8Array = (base64String) => {
   const padding = '='.repeat((4 - base64String.length % 4) % 4)
@@ -22,11 +22,21 @@ export const subscribeToPushNotifications = async () => {
     return false
   }
 
+  if (typeof Notification !== "undefined" && Notification.permission === "denied") {
+    alert("Push-сповіщення заблоковані у браузері. Дозвольте їх у налаштуваннях сайту.")
+    return false
+  }
+
   try {
-    const token = localStorage.getItem("token")
-    const keyRes = await axios.get("/api/push-public-key", {
-      headers: { Authorization: token }
-    })
+    if (typeof Notification !== "undefined" && Notification.permission === "default") {
+      const permission = await Notification.requestPermission()
+      if (permission !== "granted") {
+        alert("Без дозволу на сповіщення push-нагадування не працюватимуть.")
+        return false
+      }
+    }
+
+    const keyRes = await api.get("/push-public-key")
 
     const reg = await navigator.serviceWorker.register("/sw.js")
     let sub = await reg.pushManager.getSubscription()
@@ -38,9 +48,7 @@ export const subscribeToPushNotifications = async () => {
       })
     }
 
-    await axios.post("/api/subscribe", sub, {
-      headers: { Authorization: token }
-    })
+    await api.post("/subscribe", sub)
 
     return true
   } catch (e) {
