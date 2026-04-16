@@ -23,6 +23,20 @@ dotenv.config({ path: path.join(__dirname, "../.env") })
 
 const app = express()
 
+const isValidObjectId = (value) => mongoose.Types.ObjectId.isValid(value)
+
+const pick = (source, allowedKeys) => {
+  const output = {}
+  for (const key of allowedKeys) {
+    if (Object.prototype.hasOwnProperty.call(source, key)) {
+      output[key] = source[key]
+    }
+  }
+  return output
+}
+
+const normalizeEmail = (email) => (typeof email === "string" ? email.trim().toLowerCase() : "")
+
 const allowedOrigins = [
   process.env.FRONTEND_URL,
   "http://localhost:5173",
@@ -58,49 +72,40 @@ mongoose.connect(process.env.MONGO_URI, {
 .then(async ()=>{
   console.log("✅ MongoDB успішно підключена!")
 
-  // ✅ Створюємо адміністратора, якщо його немає
+  // ✅ Опціонально створюємо стартового адміна лише через змінні середовища
   try {
-    const adminExists = await User.findOne({
-      $or: [
-        { email: "admin@gmail.com" },
-        { username: "admin" }
-      ]
-    })
+    const adminEmail = normalizeEmail(process.env.DEFAULT_ADMIN_EMAIL)
+    const adminPassword = process.env.DEFAULT_ADMIN_PASSWORD
 
-    const hashedPassword = await bcrypt.hash("1234", 10)
-    if(!adminExists) {
-      await User.create({
-        email: "admin@gmail.com",
-        password: hashedPassword,
-        username: "admin",
-        role: "admin"
-      })
-      console.log("👑 Адміністратор створений: admin@gmail.com / 1234")
-    } else {
-      let updated = false
-      if(adminExists.role !== "admin") {
+    if (adminEmail && adminPassword) {
+      const adminExists = await User.findOne({ email: adminEmail })
+
+      if (!adminExists) {
+        const hashedPassword = await bcrypt.hash(adminPassword, 10)
+        await User.create({
+          email: adminEmail,
+          password: hashedPassword,
+          username: process.env.DEFAULT_ADMIN_USERNAME?.trim() || "admin",
+          role: "admin"
+        })
+        console.log("👑 Стартовий адміністратор створений через .env")
+      } else if (adminExists.role !== "admin") {
         adminExists.role = "admin"
-        updated = true
-      }
-      const passwordMatches = await bcrypt.compare("1234", adminExists.password)
-      if(!passwordMatches) {
-        adminExists.password = hashedPassword
-        updated = true
-      }
-      if(updated) {
         await adminExists.save()
-        console.log("👑 Адміністратор оновлений: admin@gmail.com / 1234")
+        console.log("👑 Роль стартового адміністратора оновлена")
       } else {
-        console.log("👑 Адміністратор вже існує")
+        console.log("👑 Стартовий адміністратор вже існує")
       }
+    } else {
+      console.log("ℹ️ Стартовий адміністратор не створюється: немає DEFAULT_ADMIN_EMAIL/DEFAULT_ADMIN_PASSWORD")
     }
   } catch(e) {
-        if (e.code === 11000) {
-          console.log("👑 Адміністратор вже існує (duplicate key)")
-        } else {
-          console.error("❌ Не вдалося перевірити / створити адміністратора:", e)
-        }
-      }
+    if (e.code === 11000) {
+      console.log("👑 Стартовий адміністратор вже існує (duplicate key)")
+    } else {
+      console.error("❌ Не вдалося перевірити / створити стартового адміністратора:", e)
+    }
+  }
 
       const startReminderScheduler = () => {
         const reminderWindowMs = 5 * 60 * 1000
@@ -198,9 +203,10 @@ io.on("connection",(socket)=>{
 app.post("/api/register", async(req,res)=>{
   try {
     const { email, password, username } = req.body
+    const normalizedEmail = normalizeEmail(email)
 
     // Валідація
-    if (!email || !password || !username) {
+    if (!normalizedEmail || !password || !username?.trim()) {
       return res.status(400).json("Всі поля обов'язкові")
     }
 
@@ -210,7 +216,7 @@ app.post("/api/register", async(req,res)=>{
 
     const hashedPassword = await bcrypt.hash(password, 10)
     const user = await User.create({
-      email: email.toLowerCase(),
+      email: normalizedEmail,
       password: hashedPassword,
       username: username.trim()
     })
@@ -244,12 +250,13 @@ app.post("/api/register", async(req,res)=>{
 app.post("/api/login", async(req,res)=>{
   try {
     const { email, password } = req.body
+    const normalizedEmail = normalizeEmail(email)
 
-    if (!email || !password) {
+    if (!normalizedEmail || !password) {
       return res.status(400).json("Email та пароль обов'язкові")
     }
 
-    const user = await User.findOne({email: email.toLowerCase()})
+    const user = await User.findOne({email: normalizedEmail})
     if(!user) return res.status(404).json("Користувач не знайдений")
 
     if (user.isBlocked) {
@@ -281,25 +288,57 @@ app.post("/api/login", async(req,res)=>{
 })
 
 // ✅ USER PROFILE
-app.get("/api/user/:id", async(req,res)=>{
-  const user = await User.findById(req.params.id)
+app.get("/api/user/:id", auth, async(req,res)=>{
+  if (!isValidObjectId(req.params.id)) return res.status(400).json("Некоректний id користувача")
+  if (req.user.id !== req.params.id && req.user.role !== "admin") return res.sendStatus(403)
+
+  const user = await User.findById(req.params.id).select("email username avatar role isBlocked blockedUntil createdAt")
   if(!user) return res.status(404).json("No user")
-  res.json({...user.toObject(), password: undefined})
+  res.json(user)
 })
 
 app.put("/api/user", auth, async(req,res)=>{
-  const user = await User.findByIdAndUpdate(req.user.id, req.body, {new: true})
-  res.json(user)
+  const updates = pick(req.body, ["username", "avatar", "email"])
+
+  if (typeof updates.username === "string") {
+    updates.username = updates.username.trim()
+    if (!updates.username) return res.status(400).json("Ім'я користувача не може бути порожнім")
+  }
+
+  if (typeof updates.email === "string") {
+    updates.email = normalizeEmail(updates.email)
+    if (!updates.email) return res.status(400).json("Некоректний email")
+  }
+
+  if (Object.keys(updates).length === 0) {
+    return res.status(400).json("Немає дозволених полів для оновлення")
+  }
+
+  const user = await User.findByIdAndUpdate(req.user.id, updates, {new: true, runValidators: true})
+  res.json({
+    id: user._id,
+    email: user.email,
+    username: user.username,
+    avatar: user.avatar,
+    role: user.role,
+    isBlocked: user.isBlocked,
+    blockedUntil: user.blockedUntil
+  })
 })
 
 // ✅ FOLLOW SYSTEM
 app.post("/api/follow/:userId", auth, async(req,res)=>{
+  if (!isValidObjectId(req.params.userId)) return res.status(400).json("Некоректний id користувача")
+  if (req.user.id === req.params.userId) return res.status(400).json("Неможливо підписатися на себе")
+
   await User.findByIdAndUpdate(req.user.id, {$addToSet: {following: req.params.userId}})
   await User.findByIdAndUpdate(req.params.userId, {$addToSet: {followers: req.user.id}})
   res.json("Followed")
 })
 
 app.post("/api/unfollow/:userId", auth, async(req,res)=>{
+  if (!isValidObjectId(req.params.userId)) return res.status(400).json("Некоректний id користувача")
+
   await User.findByIdAndUpdate(req.user.id, {$pull: {following: req.params.userId}})
   await User.findByIdAndUpdate(req.params.userId, {$pull: {followers: req.user.id}})
   res.json("Unfollowed")
@@ -338,8 +377,13 @@ const ensureNotBlocked = (req, res, next) => {
 }
 
 app.post("/api/habits", auth, ensureNotBlocked, async(req,res)=>{
+  const allowedFields = pick(req.body, ["title", "date", "dueTime", "reminder", "public", "notes", "commentsEnabled"])
+  if (!allowedFields.title || !allowedFields.date || !allowedFields.dueTime) {
+    return res.status(400).json("Потрібні title, date і dueTime")
+  }
+
   const habit = await Habit.create({
-    ...req.body,
+    ...allowedFields,
     user:req.user.id
   })
   res.json(habit)
@@ -349,7 +393,25 @@ app.put("/api/habits/:id", auth, ensureNotBlocked, async(req,res)=>{
   const habit = await Habit.findById(req.params.id)
   if(!habit) return res.status(404).json("Habit not found")
   if(habit.user.toString() !== req.user.id) return res.status(403).json("Forbidden")
-  Object.assign(habit, req.body)
+
+  const allowedUpdates = pick(req.body, [
+    "title",
+    "date",
+    "dueTime",
+    "reminder",
+    "completed",
+    "completedAt",
+    "public",
+    "notes",
+    "commentsEnabled",
+    "achievementDeleted"
+  ])
+
+  if (Object.keys(allowedUpdates).length === 0) {
+    return res.status(400).json("Немає дозволених полів для оновлення")
+  }
+
+  Object.assign(habit, allowedUpdates)
   await habit.save()
   res.json(habit)
 })
@@ -462,7 +524,18 @@ app.put("/api/complaint/:id", auth, async(req,res)=>{
   if(req.user.role !== "admin") return res.sendStatus(403)
   
   const complaint = await Complaint.findById(req.params.id)
-  const duration = (complaint.blockDuration || 7) * 24 * 60 * 60 * 1000
+  if(!complaint) return res.status(404).json("Complaint not found")
+
+  const allowedStatuses = ["approved", "rejected"]
+  if (!allowedStatuses.includes(req.body.status)) {
+    return res.status(400).json("Недійсний статус скарги")
+  }
+
+  const blockDuration = Number.isFinite(Number(req.body.blockDuration))
+    ? Math.max(1, Math.min(365, Number(req.body.blockDuration)))
+    : (Number.isFinite(Number(complaint.blockDuration)) ? Number(complaint.blockDuration) : 7)
+
+  const duration = blockDuration * 24 * 60 * 60 * 1000
   const blockedUntil = new Date(Date.now() + duration)
   
   if(req.body.status === "approved") {
@@ -474,7 +547,7 @@ app.put("/api/complaint/:id", auth, async(req,res)=>{
   
   const updated = await Complaint.findByIdAndUpdate(
     req.params.id,
-    { ...req.body, resolvedAt: new Date() },
+    { status: req.body.status, blockDuration, resolvedAt: new Date() },
     { new: true }
   )
   res.json(updated)
@@ -489,13 +562,17 @@ app.delete("/api/complaint/:id", auth, async(req,res)=>{
 // ✅ ADMIN
 app.get("/api/admin/users", auth, async(req,res)=>{
   if(req.user.role !== "admin") return res.sendStatus(403)
-  const users = await User.find()
+  const users = await User.find().select("email username avatar role isBlocked blockedUntil createdAt followers following")
   res.json(users)
 })
 
 app.post("/api/admin/block/:userId", auth, async(req,res)=>{
   if(req.user.role !== "admin") return res.sendStatus(403)
-  const { days } = req.body
+  if (!isValidObjectId(req.params.userId)) return res.status(400).json("Некоректний id користувача")
+
+  const days = Number(req.body.days)
+  if (!Number.isFinite(days) || days < 1 || days > 365) return res.status(400).json("Некоректна кількість днів")
+
   const blockedUntil = new Date(Date.now() + days * 24 * 60 * 60 * 1000)
   const user = await User.findByIdAndUpdate(req.params.userId, {
     isBlocked: true,
@@ -506,6 +583,8 @@ app.post("/api/admin/block/:userId", auth, async(req,res)=>{
 
 app.post("/api/admin/unblock/:userId", auth, async(req,res)=>{
   if(req.user.role !== "admin") return res.sendStatus(403)
+  if (!isValidObjectId(req.params.userId)) return res.status(400).json("Некоректний id користувача")
+
   const user = await User.findByIdAndUpdate(req.params.userId, {
     isBlocked: false,
     blockedUntil: null
@@ -515,6 +594,8 @@ app.post("/api/admin/unblock/:userId", auth, async(req,res)=>{
 
 app.put("/api/admin/role/:userId", auth, async(req,res)=>{
   if(req.user.role !== "admin") return res.sendStatus(403)
+  if (!isValidObjectId(req.params.userId)) return res.status(400).json("Некоректний id користувача")
+
   const { role } = req.body
   if (!["admin", "user"].includes(role)) return res.status(400).json("Недійсна роль")
 

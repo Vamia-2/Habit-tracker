@@ -1059,9 +1059,20 @@ button:disabled {
 
 /* ===== RESPONSIVE ===== */
 @media (max-width: 768px) {
+  .dashboard {
+    padding: 24px 16px 32px;
+  }
+
   .dashboard-header {
     flex-direction: column;
     align-items: flex-start;
+    gap: 16px;
+    margin-bottom: 28px;
+  }
+
+  .dashboard-header h1 {
+    font-size: 28px;
+    line-height: 1.15;
   }
 
   .header-controls {
@@ -1069,8 +1080,17 @@ button:disabled {
     justify-content: flex-start;
   }
 
+  .menu-wrap {
+    width: fit-content;
+  }
+
   .menu-dropdown {
-    min-width: 200px;
+    left: 0;
+    right: auto;
+    width: min(calc(100vw - 32px), 280px);
+    min-width: 0;
+    max-width: calc(100vw - 32px);
+    transform-origin: top left;
   }
 
   .habits-grid {
@@ -1096,6 +1116,10 @@ button:disabled {
 
   .achievement-card-large {
     padding: 20px;
+  }
+
+  .achievement-hero-copy p {
+    font-size: 15px;
   }
 }
 
@@ -1516,6 +1540,33 @@ button:disabled {
   font-size: 18px;
 }
 
+.search-row {
+  margin-bottom: 14px;
+}
+
+.search-row input {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(255, 255, 255, 0.92);
+  color: #1e293b;
+  font: inherit;
+}
+
+.chat-page.dark .search-row input {
+  background: rgba(15, 23, 42, 0.72);
+  border-color: rgba(148, 163, 184, 0.28);
+  color: #f1f5f9;
+}
+
+.user-card {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  align-items: stretch;
+}
+
 .users-container {
   overflow-y: auto;
   flex: 1;
@@ -1534,6 +1585,7 @@ button:disabled {
   transition: all 0.3s;
   color: inherit;
   font-family: inherit;
+  width: 100%;
 }
 
 .user-button:hover {
@@ -1569,6 +1621,7 @@ button:disabled {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  padding: 20px;
 }
 
 .chat-page.light .chat-area {
@@ -1582,6 +1635,109 @@ button:disabled {
   height: 100%;
   opacity: 0.5;
   font-size: 18px;
+  text-align: center;
+}
+
+.selected-user-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  height: 100%;
+}
+
+.selected-user-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 16px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.chat-page.light .selected-user-card {
+  background: rgba(255, 255, 255, 0.7);
+  border-color: rgba(148, 163, 184, 0.18);
+}
+
+.selected-user-card strong {
+  font-size: 18px;
+}
+
+.selected-user-card span {
+  font-size: 13px;
+  opacity: 0.7;
+  word-break: break-word;
+}
+
+.user-stats-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.user-stats-row div {
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 14px;
+}
+
+.chat-page.light .user-stats-row div {
+  background: rgba(255, 255, 255, 0.7);
+  border-color: rgba(148, 163, 184, 0.16);
+}
+
+.complaint-form-card {
+  margin-top: auto;
+  padding: 18px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.chat-page.light .complaint-form-card {
+  background: rgba(255, 255, 255, 0.7);
+  border-color: rgba(148, 163, 184, 0.18);
+}
+
+.complaint-form-card h4 {
+  font-size: 16px;
+  margin-bottom: 14px;
+}
+
+.complaint-form-card .form-group {
+  margin-bottom: 14px;
+}
+
+.complaint-form-card .form-group label {
+  margin-bottom: 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.complaint-form-card .form-group input,
+.complaint-form-card .form-group textarea {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(255, 255, 255, 0.92);
+  color: #1e293b;
+  font: inherit;
+}
+
+.chat-page.dark .complaint-form-card .form-group input,
+.chat-page.dark .complaint-form-card .form-group textarea {
+  background: rgba(15, 23, 42, 0.72);
+  border-color: rgba(148, 163, 184, 0.28);
+  color: #f1f5f9;
+}
+
+.complaint-form-card .btn-danger {
+  width: 100%;
+  padding: 12px 16px;
 }
 
 .messages-container {
@@ -1664,14 +1820,56 @@ button:disabled {
 }
 
 @media (max-width: 768px) {
+  .chat-page {
+    padding: 14px;
+  }
+
+  .chat-container {
+    height: auto;
+    min-height: calc(100vh - 28px);
+  }
+
+  .chat-header {
+    align-items: flex-start;
+  }
+
+  .chat-header h1 {
+    font-size: 24px;
+  }
+
   .chat-wrapper {
     grid-template-columns: 1fr;
     gap: 10px;
   }
 
   .users-list {
-    max-height: 150px;
+    max-height: none;
     border-radius: 12px;
+  }
+
+  .users-container {
+    max-height: 260px;
+  }
+
+  .user-card {
+    grid-template-columns: 1fr;
+  }
+
+  .user-card .btn-secondary.small {
+    width: 100%;
+  }
+
+  .chat-area {
+    min-height: 340px;
+    padding: 16px;
+  }
+
+  .user-stats-row {
+    grid-template-columns: 1fr;
+  }
+
+  .complaint-form-card {
+    padding: 16px;
   }
 
   .message {

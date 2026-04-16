@@ -2,12 +2,29 @@ import { useEffect, useState } from "react"
 import api from "../api"
 import { useTheme } from "../ThemeContext"
 
+const decodeJwtPayload = (token) => {
+  try {
+    const payload = token?.split(".")?.[1]
+    if (!payload) return null
+
+    const base64 = payload.replace(/-/g, "+").replace(/_/g, "/")
+    const padded = base64 + "=".repeat((4 - base64.length % 4) % 4)
+
+    return JSON.parse(window.atob(padded))
+  } catch {
+    return null
+  }
+}
+
 export default function Complaint(){
   const [users, setUsers] = useState([])
   const [search, setSearch] = useState("")
   const [selectedUser, setSelectedUser] = useState(null)
   const [selectedUserStats, setSelectedUserStats] = useState(null)
   const [currentUser, setCurrentUser] = useState(null)
+  const [complaintReason, setComplaintReason] = useState("")
+  const [complaintDescription, setComplaintDescription] = useState("")
+  const [sending, setSending] = useState(false)
   const { theme, toggleTheme } = useTheme()
 
   useEffect(() => {
@@ -27,7 +44,8 @@ export default function Complaint(){
       try {
         const token = localStorage.token
         if (!token) return
-        const decoded = JSON.parse(atob(token.split('.')[1]))
+        const decoded = decodeJwtPayload(token)
+        if (!decoded?.id) return
         const res = await api.get(`/user/${decoded.id}`)
         setCurrentUser(res.data)
       } catch (e) {
@@ -57,32 +75,60 @@ export default function Complaint(){
 
   const isBlocked = currentUser?.isBlocked && currentUser.blockedUntil && new Date(currentUser.blockedUntil) > new Date()
 
-  const reportUser = async (user) => {
+  const openComplaintForm = (user) => {
+    if (isBlocked) {
+      alert("Ви заблоковані і не можете подавати скарги.")
+      return
+    }
+
+    setSelectedUser(user._id)
+    setComplaintReason("")
+    setComplaintDescription("")
+  }
+
+  const reportUser = async () => {
     if (isBlocked) {
       return alert("Ви заблоковані і не можете подавати скарги.")
     }
 
-    const reason = prompt(`Вкажіть причину скарги для ${user.username || user.email}`)
-    if (!reason) return
+    if (!selectedUser) {
+      return alert("Спочатку виберіть користувача")
+    }
 
-    const description = prompt("Опишіть ситуацію детальніше")
-    if (description === null) return
+    if (!complaintReason.trim()) {
+      return alert("Вкажіть причину скарги")
+    }
+
+    if (!complaintDescription.trim()) {
+      return alert("Опишіть ситуацію детальніше")
+    }
 
     try {
+      setSending(true)
       const token = localStorage.token
-      const decoded = JSON.parse(atob(token.split('.')[1]))
+      const decoded = decodeJwtPayload(token)
+
+      const targetUser = users.find(user => user._id === selectedUser)
+      if (!targetUser) {
+        return alert("Користувача не знайдено")
+      }
 
       await api.post("/complaint", {
-        reportedUser: user._id,
-        reportedUserEmail: user.email,
-        reason,
-        description,
-        reporterEmail: decoded.email
+        reportedUser: targetUser._id,
+        reportedUserEmail: targetUser.email,
+        reason: complaintReason.trim(),
+        description: complaintDescription.trim(),
+        reporterEmail: decoded?.email || currentUser?.email || null
       })
+
       alert("Скаргу відправлено адміну")
+      setComplaintReason("")
+      setComplaintDescription("")
     } catch (e) {
       console.error(e)
       alert("Не вдалося відправити скаргу")
+    } finally {
+      setSending(false)
     }
   }
 
@@ -123,7 +169,7 @@ export default function Complaint(){
                   <div key={u._id} className="user-card">
                     <button
                       className={`user-button ${selectedUser === u._id ? "active" : ""}`}
-                      onClick={() => setSelectedUser(u._id)}
+                      onClick={() => openComplaintForm(u)}
                     >
                       <div className="user-button-content">
                         <p className="user-button-name">{u.username || u.email.split("@")[0]}</p>
@@ -134,10 +180,10 @@ export default function Complaint(){
                       className="btn-secondary small"
                       onClick={(e) => {
                         e.stopPropagation()
-                        reportUser(u)
+                        openComplaintForm(u)
                       }}
                       disabled={isBlocked}
-                      title={isBlocked ? "Ви заблоковані і не можете подавати скарги" : "Подати скаргу"}
+                      title={isBlocked ? "Ви заблоковані і не можете подавати скарги" : "Відкрити форму скарги"}
                     >
                       🚨 Скарга
                     </button>
@@ -157,19 +203,53 @@ export default function Complaint(){
             {selectedUser ? (
               <>
                 <div className="selected-user-summary">
-                  <h3>Аналітика користувача</h3>
+                  <h3>Аналітика та скарга</h3>
                   {selectedUserStats ? (
-                    <div className="user-stats-row">
-                      <div>Користувач: {selectedUserStats.user.username || selectedUserStats.user.email}</div>
-                      <div>Виконано: {selectedUserStats.completedCount}</div>
-                      <div>Невиконано: {selectedUserStats.pendingCount}</div>
-                      <div>Просрочено: {selectedUserStats.overdueCount}</div>
-                      <div>Загалом: {selectedUserStats.totalCount}</div>
-                      <div>Рейтинг: {selectedUserStats.completionRate}%</div>
-                    </div>
+                    <>
+                      <div className="selected-user-card">
+                        <strong>{selectedUserStats.user.username || selectedUserStats.user.email}</strong>
+                        <span>{selectedUserStats.user.email}</span>
+                      </div>
+                      <div className="user-stats-row">
+                        <div>Виконано: {selectedUserStats.completedCount}</div>
+                        <div>Невиконано: {selectedUserStats.pendingCount}</div>
+                        <div>Просрочено: {selectedUserStats.overdueCount}</div>
+                        <div>Загалом: {selectedUserStats.totalCount}</div>
+                        <div>Рейтинг: {selectedUserStats.completionRate}%</div>
+                      </div>
+                    </>
                   ) : (
                     <p>Завантаження аналітики...</p>
                   )}
+
+                  <div className="complaint-form-card">
+                    <h4>Нова скарга</h4>
+                    <div className="form-group">
+                      <label>Причина</label>
+                      <input
+                        type="text"
+                        placeholder="Наприклад: образи, спам, порушення правил"
+                        value={complaintReason}
+                        onChange={e => setComplaintReason(e.target.value)}
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label>Опис</label>
+                      <textarea
+                        rows="5"
+                        placeholder="Опишіть ситуацію детальніше"
+                        value={complaintDescription}
+                        onChange={e => setComplaintDescription(e.target.value)}
+                      />
+                    </div>
+                    <button
+                      className="btn-danger"
+                      onClick={reportUser}
+                      disabled={isBlocked || sending || !selectedUser}
+                    >
+                      {sending ? "⏳ Відправляємо..." : "🚨 Надіслати скаргу"}
+                    </button>
+                  </div>
                 </div>
               </>
             ) : (
