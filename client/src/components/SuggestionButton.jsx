@@ -32,7 +32,11 @@ export default function SuggestionButton(){
       setText("")
       setType(suggestionTypes[0])
     } catch (error) {
-      setStatus({ kind: "error", message: error.response?.data || "Не вдалося надіслати пропозицію" })
+      const responseMessage = typeof error.response?.data === "string" ? error.response.data : null
+      const message = error.message === "AUTH_REQUIRED"
+        ? "Увійдіть в акаунт, щоб надіслати пропозицію"
+        : (responseMessage || "Не вдалося надіслати пропозицію")
+      setStatus({ kind: "error", message })
     } finally {
       setSending(false)
     }

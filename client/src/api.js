@@ -15,27 +15,11 @@ api.interceptors.request.use(config => {
   return config
 })
 
-const parseJwtPayload = (token) => {
-  try {
-    const encodedPayload = token?.split(".")?.[1]
-    if (!encodedPayload) return null
-    const base64 = encodedPayload.replace(/-/g, "+").replace(/_/g, "/")
-    const padded = base64 + "=".repeat((4 - base64.length % 4) % 4)
-    return JSON.parse(window.atob(padded))
-  } catch {
-    return null
-  }
-}
-
 export const submitSuggestion = ({ type, text }) => {
-  const payload = parseJwtPayload(localStorage.token)
-  return api.post("/complaint", {
-    reportedUser: payload?.id || "000000000000000000000000",
-    reportedUserEmail: null,
-    reporterEmail: payload?.email || null,
-    reason: `Пропозиція: ${type}`,
-    description: text.trim()
-  })
+  if (!localStorage.token) {
+    return Promise.reject(new Error("AUTH_REQUIRED"))
+  }
+  return api.post("/suggestion", { type, text })
 }
 
 export default api
