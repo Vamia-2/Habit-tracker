@@ -15,4 +15,11 @@ api.interceptors.request.use(config => {
   return config
 })
 
+export const submitSuggestion = ({ type, text }) => {
+  if (!localStorage.token) {
+    return Promise.reject(new Error("AUTH_REQUIRED"))
+  }
+  return api.post("/suggestion", { type, text })
+}
+
 export default api

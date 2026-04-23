@@ -8,11 +8,13 @@ import path from "path"
 import { fileURLToPath } from "url"
 import dotenv from "dotenv"
 import bcrypt from "bcryptjs"
+import { rateLimit } from "express-rate-limit"
 
 import User from "./models/User.js"
 import Habit from "./models/Habit.js"
 import Message from "./models/Message.js"
 import Complaint from "./models/Complaint.js"
+import Suggestion, { SUGGESTION_TYPES } from "./models/Suggestion.js"
 import auth from "./middleware/auth.js"
 import { sendPush } from "./push.js"
 
@@ -388,6 +390,14 @@ const ensureNotBlocked = (req, res, next) => {
   next()
 }
 
+const suggestionRateLimit = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: "Забагато запитів. Спробуйте пізніше."
+})
+
 app.post("/api/habits", auth, ensureNotBlocked, async(req,res)=>{
   const allowedFields = pick(req.body, ["title", "date", "dueTime", "reminder", "public", "notes", "commentsEnabled"])
   if (!allowedFields.title || !allowedFields.date || !allowedFields.dueTime) {
@@ -536,6 +546,27 @@ app.post("/api/complaint", auth, ensureNotBlocked, async(req,res)=>{
     description
   })
   res.json(complaint)
+})
+
+app.post("/api/suggestion", auth, ensureNotBlocked, suggestionRateLimit, async (req, res) => {
+  const { type, text } = req.body
+
+  if (!SUGGESTION_TYPES.includes(type) || !text?.trim()) {
+    return res.status(400).json("Потрібні коректні type та text")
+  }
+
+  try {
+    const suggestion = await Suggestion.create({
+      user: req.user.id,
+      userEmail: req.user.email || null,
+      type,
+      text: text.trim()
+    })
+
+    res.json(suggestion)
+  } catch {
+    res.status(500).json("Помилка при збереженні пропозиції")
+  }
 })
 
 app.get("/api/complaints", auth, async(req,res)=>{
