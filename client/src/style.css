@@ -649,6 +649,81 @@ button:disabled {
   margin-bottom: 30px;
 }
 
+.section-tabs,
+.habit-filters {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+
+.habit-tabs {
+  margin-bottom: 14px;
+}
+
+.cycle-days-picker {
+  margin-bottom: 18px;
+  padding: 16px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.dashboard.light .cycle-days-picker {
+  background: rgba(255, 255, 255, 0.55);
+  border-color: rgba(148, 163, 184, 0.16);
+}
+
+.picker-label {
+  margin-bottom: 12px;
+  opacity: 0.8;
+  font-size: 14px;
+}
+
+.weekday-grid,
+.weekday-filter-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.weekday-pill,
+.weekday-chip {
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.08);
+  color: inherit;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  min-width: 52px;
+}
+
+.weekday-pill.active,
+.weekday-chip.active,
+.tab.active {
+  background: rgba(59, 130, 246, 0.2);
+  border-color: rgba(59, 130, 246, 0.5);
+  opacity: 1;
+}
+
+.dashboard.light .weekday-pill,
+.dashboard.light .weekday-chip {
+  background: rgba(15, 23, 42, 0.04);
+  border-color: rgba(148, 163, 184, 0.18);
+}
+
+.cycle-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  background: rgba(59, 130, 246, 0.14);
+  color: #60a5fa;
+  font-size: 12px;
+  font-weight: 600;
+  width: fit-content;
+}
+
 .analytics-tabs {
   display: flex;
   gap: 12px;
@@ -1810,6 +1885,116 @@ button:disabled {
   border-color: #3b82f6 !important;
 }
 
+.floating-suggestion-btn {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 40;
+  width: auto;
+  padding: 14px 18px;
+  border-radius: 999px;
+  color: #fff;
+  background: linear-gradient(135deg, #0f766e, #14b8a6);
+  box-shadow: 0 16px 35px rgba(20, 184, 166, 0.35);
+  backdrop-filter: blur(10px);
+}
+
+.floating-suggestion-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 18px 40px rgba(20, 184, 166, 0.45);
+}
+
+.suggestion-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(2, 6, 23, 0.58);
+  backdrop-filter: blur(8px);
+}
+
+.suggestion-modal {
+  width: min(560px, 100%);
+  padding: 22px;
+  border-radius: 22px;
+  background: rgba(15, 23, 42, 0.95);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  box-shadow: 0 30px 80px rgba(15, 23, 42, 0.45);
+  color: #f8fafc;
+}
+
+.suggestion-modal.light {
+  background: rgba(255, 255, 255, 0.98);
+  border-color: rgba(148, 163, 184, 0.28);
+  color: #1e293b;
+}
+
+.suggestion-modal.light .suggestion-modal-text {
+  color: rgba(30, 41, 59, 0.72);
+}
+
+.suggestion-modal.light .suggestion-textarea {
+  background: rgba(248, 250, 252, 0.96);
+  border-color: rgba(148, 163, 184, 0.35);
+  color: #1e293b;
+}
+
+.suggestion-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.suggestion-modal-header h3 {
+  font-size: 20px;
+}
+
+.modal-close {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  color: inherit;
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 26px;
+  line-height: 1;
+}
+
+.suggestion-modal-text {
+  margin-bottom: 16px;
+  color: rgba(248, 250, 252, 0.78);
+  line-height: 1.5;
+}
+
+.suggestion-textarea {
+  width: 100%;
+  min-height: 160px;
+  resize: vertical;
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(15, 23, 42, 0.72);
+  color: #f8fafc;
+  font: inherit;
+}
+
+.suggestion-textarea:focus {
+  outline: none;
+  border-color: #14b8a6;
+  box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.18);
+}
+
+.suggestion-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 16px;
+}
+
 .send-btn {
   width: auto;
   padding: 12px 20px !important;
@@ -1870,6 +2055,26 @@ button:disabled {
 
   .complaint-form-card {
     padding: 16px;
+  }
+
+  .floating-suggestion-btn {
+    right: 14px;
+    bottom: 14px;
+    padding: 12px 16px;
+  }
+
+  .suggestion-modal {
+    padding: 18px;
+    border-radius: 18px;
+  }
+
+  .suggestion-actions {
+    flex-direction: column;
+  }
+
+  .suggestion-actions .btn-primary,
+  .suggestion-actions .btn-secondary {
+    width: 100%;
   }
 
   .message {
@@ -2028,6 +2233,58 @@ canvas {
   background: rgba(255, 255, 255, 0.6);
 }
 
+/* ===== TOASTS ===== */
+.toast-root {
+  position: fixed;
+  top: 18px;
+  right: 18px;
+  z-index: 2000;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: none;
+  width: min(360px, calc(100vw - 24px));
+}
+
+.app-toast {
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: #f8fafc;
+  background: rgba(15, 23, 42, 0.94);
+  box-shadow: 0 10px 25px rgba(2, 6, 23, 0.28);
+  line-height: 1.35;
+  font-size: 14px;
+  animation: toastIn 0.22s ease-out;
+  word-break: break-word;
+}
+
+.app-toast.success {
+  background: rgba(5, 93, 50, 0.95);
+  border-color: rgba(52, 211, 153, 0.45);
+}
+
+.app-toast.error {
+  background: rgba(127, 29, 29, 0.95);
+  border-color: rgba(248, 113, 113, 0.45);
+}
+
+.app-toast.warning {
+  background: rgba(120, 53, 15, 0.95);
+  border-color: rgba(251, 191, 36, 0.45);
+}
+
+@keyframes toastIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) translateX(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) translateX(0);
+  }
+}
+
 .stat-card:hover {
   transform: translateY(-2px);
   box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
@@ -2150,6 +2407,13 @@ canvas {
 @media (max-width: 768px) {
   .stats-overview {
     grid-template-columns: 1fr;
+  }
+
+  .toast-root {
+    top: 12px;
+    right: 12px;
+    left: 12px;
+    width: auto;
   }
 
   .charts-section {

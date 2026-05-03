@@ -176,17 +176,7 @@ export default function Complaint(){
                         <p className="user-button-email">{u.email}</p>
                       </div>
                     </button>
-                    <button
-                      className="btn-secondary small"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        openComplaintForm(u)
-                      }}
-                      disabled={isBlocked}
-                      title={isBlocked ? "Ви заблоковані і не можете подавати скарги" : "Відкрити форму скарги"}
-                    >
-                      🚨 Скарга
-                    </button>
+                    {/* report button removed per request */}
                   </div>
                 ))
               )}

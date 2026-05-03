@@ -1,9 +1,29 @@
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import api from "../api"
 import HabitCard from "../components/HabitCard"
 import LineChart from "../components/LineChart"
 import { useTheme } from "../ThemeContext"
+
+const WEEKDAY_OPTIONS = [
+  { value: 0, short: "Нд" },
+  { value: 1, short: "Пн" },
+  { value: 2, short: "Вт" },
+  { value: 3, short: "Ср" },
+  { value: 4, short: "Чт" },
+  { value: 5, short: "Пт" },
+  { value: 6, short: "Сб" }
+]
+
+const normalizeCycleDays = (value) => {
+  if (!Array.isArray(value)) return []
+
+  return [...new Set(
+    value
+      .map((day) => Number(day))
+      .filter((day) => Number.isInteger(day) && day >= 0 && day <= 6)
+  )].sort((a, b) => a - b)
+}
 
 const decodeJwtPayload = (token) => {
   try {
@@ -19,24 +39,49 @@ const decodeJwtPayload = (token) => {
   }
 }
 
-export default function Dashboard(){
+export default function Dashboard({ initialSection = "habits" }){
   const [habits, setHabits] = useState([])
   const [achievements, setAchievements] = useState([])
   const [showAnalytics, setShowAnalytics] = useState(false)
   const [analyticsTab, setAnalyticsTab] = useState("overview")
+  const [activeSection, setActiveSection] = useState(initialSection === "cycles" ? "cycles" : "habits")
+  const [habitFilter, setHabitFilter] = useState("all")
+  const [selectedWeekday, setSelectedWeekday] = useState(null)
   const [title, setTitle] = useState("")
   const [date, setDate] = useState(new Date().toISOString().split('T')[0])
   const [time, setTime] = useState("09:00")
   const [reminder, setReminder] = useState(false)
+  const [cycleDays, setCycleDays] = useState([])
   const [user, setUser] = useState(null)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [suggestionOpen, setSuggestionOpen] = useState(false)
+  const [suggestionText, setSuggestionText] = useState("")
+  const [sendingSuggestion, setSendingSuggestion] = useState(false)
   const menuRef = useRef(null)
+  const skipNextFocusLoadRef = useRef(false)
   const { theme, toggleTheme } = useTheme()
   const navigate = useNavigate()
 
   const blockedUntil = user?.blockedUntil ? new Date(user.blockedUntil) : null
   const isBlocked = user?.isBlocked && blockedUntil && blockedUntil > new Date()
   const blockedDays = isBlocked ? Math.max(1, Math.ceil((blockedUntil - Date.now()) / (1000 * 60 * 60 * 24))) : 0
+
+  const getHabitCompletionStatus = (habit) => {
+    if (!habit) return false
+    const isRecurring = normalizeCycleDays(habit.cycleDays).length > 0
+    
+    if (!isRecurring) {
+      return habit.completed
+    }
+    
+    // Для циклічних: розпізнаємо, чи виконана сьогодні
+    if (!habit.completedAt) return false
+    const today = new Date()
+    const completedDate = new Date(habit.completedAt)
+    const completedKey = `${completedDate.getFullYear()}-${String(completedDate.getMonth() + 1).padStart(2, "0")}-${String(completedDate.getDate()).padStart(2, "0")}`
+    const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`
+    return completedKey === todayKey
+  }
 
   const load = async () => {
     const token = localStorage.getItem("token")
@@ -81,7 +126,13 @@ export default function Dashboard(){
   }
 
   useEffect(() => {
-    const handleFocus = () => load()
+    const handleFocus = () => {
+      if (skipNextFocusLoadRef.current) {
+        skipNextFocusLoadRef.current = false
+        return
+      }
+      load()
+    }
     window.addEventListener("focus", handleFocus)
     return () => window.removeEventListener("focus", handleFocus)
   }, [])
@@ -108,9 +159,9 @@ export default function Dashboard(){
     }
   }, [])
 
-  const completedCount = habits.filter(h => h.completed).length
-  const overdueCount = habits.filter(h => !h.completed && new Date(h.date) < new Date()).length
-  const pendingCount = habits.filter(h => !h.completed && new Date(h.date) >= new Date()).length
+  const completedCount = habits.filter(h => getHabitCompletionStatus(h)).length
+  const overdueCount = habits.filter(h => !getHabitCompletionStatus(h) && new Date(h.date) < new Date()).length
+  const pendingCount = habits.filter(h => !getHabitCompletionStatus(h) && new Date(h.date) >= new Date()).length
   const completionRate = habits.length ? Math.round((completedCount / habits.length) * 100) : 0
   const completionChartHabits = achievements
     .map(h => ({ completedDates: [new Date(h.completedAt || h.date).toISOString().slice(0,10)] }))
@@ -148,23 +199,62 @@ export default function Dashboard(){
     return "Класно, ти рухаєшся вперед!"
   }
 
+  const isRecurringHabit = (habit) => normalizeCycleDays(habit.cycleDays).length > 0
+
+  const matchesSelectedDay = (habit, weekday) => {
+    if (weekday === null || weekday === undefined) return true
+
+    const cycle = normalizeCycleDays(habit.cycleDays)
+    if (cycle.length > 0) return cycle.includes(weekday)
+
+    return new Date(habit.date).getDay() === weekday
+  }
+
+  const visibleHabits = useMemo(() => {
+    const sorted = habits.slice().sort((a, b) => new Date(a.date) - new Date(b.date))
+    const now = new Date()
+
+    return sorted.filter((habit) => {
+      if (habitFilter === "overdue") {
+        return !habit.completed && new Date(habit.date) < now
+      }
+
+      if (habitFilter === "day") {
+        return matchesSelectedDay(habit, selectedWeekday)
+      }
+
+      return true
+    })
+  }, [activeSection, habitFilter, habits, selectedWeekday])
+
+  const toggleCycleDay = (weekday) => {
+    setCycleDays((prev) => prev.includes(weekday)
+      ? prev.filter((day) => day !== weekday)
+      : [...prev, weekday].sort((a, b) => a - b))
+  }
+
   const add = async () => {
     if (isBlocked) {
       return alert(`Ви заблоковані на ${blockedDays} ${blockedDays === 1 ? 'день' : 'днів'} і не можете додавати звички.`)
     }
     if(!title) return alert("Введіть названя звички")
+    if (activeSection === "cycles" && cycleDays.length === 0) {
+      return alert("Оберіть хоча б один день для циклу")
+    }
     
     try {
       await api.post("/habits", {
         title,
         date: new Date(`${date}T${time}`),
         reminder,
-        dueTime: time
+        dueTime: time,
+        cycleDays: activeSection === "cycles" ? cycleDays : []
       })
       setTitle("")
       setDate(new Date().toISOString().split('T')[0])
       setTime("09:00")
       setReminder(false)
+      setCycleDays([])
       load()
     } catch(e) {
       alert("Помилка додавання звички")
@@ -177,11 +267,13 @@ export default function Dashboard(){
     }
     if (!confirm("Видалити звичку?")) return
     try {
+      skipNextFocusLoadRef.current = true
       await api.delete(`/habits/${id}`)
       setHabits(prev => prev.filter(h => h._id !== id))
       setAchievements(prev => prev.filter(a => a._id !== id))
     } catch (e) {
       console.error(e)
+      skipNextFocusLoadRef.current = false
       alert("Не вдалося видалити звичку")
     }
   }
@@ -266,39 +358,79 @@ export default function Dashboard(){
   }
 
   const handleReminderChange = async (event) => {
-    const next = event.target.checked
+    const shouldEnable = event.target.checked
+    
+    if (!shouldEnable) {
+      // Unchecking is always allowed
+      setReminder(false)
+      return
+    }
+
+    // Checking the box - immediately mark as checked, then set up push
+    setReminder(true)
+    
+    // Need to ensure push is set up
     const hasPushSubscription = Boolean(user?.hasPushSubscription || user?.pushSubscription)
 
-    if (next && !hasPushSubscription) {
-      const enablePush = window.confirm("Щоб нагадування працювало, потрібно увімкнути push-сповіщення. Увімкнути зараз?")
-      if (!enablePush) {
-        alert("Для нагадувань потрібно увімкнути push-сповіщення.")
-        setReminder(false)
-        return
-      }
-
-      try {
-        const { subscribeToPushNotifications } = await import("../components/PushSettings")
-        const subscribed = await subscribeToPushNotifications()
-        if (!subscribed) {
+    try {
+      if (!hasPushSubscription) {
+        const enablePush = window.confirm("Щоб нагадування працювало, потрібно увімкнути push-сповіщення. Увімкнути зараз?")
+        if (!enablePush) {
+          alert("Для нагадувань потрібно увімкнути push-сповіщення.")
           setReminder(false)
           return
         }
+      }
 
-        await load()
-      } catch (error) {
-        console.error(error)
+      const { ensurePushNotificationsReady } = await import("../components/PushSettings")
+      const ready = await ensurePushNotificationsReady()
+      
+      if (!ready) {
         setReminder(false)
         return
       }
-    }
 
-    setReminder(next)
+      await load()
+    } catch (error) {
+      console.error("Error enabling reminder:", error)
+      alert(`Помилка при увімкненні нагадувань: ${error.message || error}`)
+      setReminder(false)
+    }
   }
 
   const handleLogout = () => {
     setMenuOpen(false)
     logout()
+  }
+
+  const openSuggestionDialog = () => {
+    setSuggestionOpen(true)
+  }
+
+  const closeSuggestionDialog = () => {
+    if (sendingSuggestion) return
+    setSuggestionOpen(false)
+    setSuggestionText("")
+  }
+
+  const submitSuggestion = async () => {
+    if (!suggestionText.trim()) {
+      alert("Напишіть, що ви хочете додати, змінити або видалити")
+      return
+    }
+
+    try {
+      setSendingSuggestion(true)
+      await api.post("/suggestions", { text: suggestionText.trim() })
+      alert("Пропозицію відправлено адміну")
+      setSuggestionText("")
+      setSuggestionOpen(false)
+    } catch (error) {
+      console.error(error)
+      alert("Не вдалося відправити пропозицію")
+    } finally {
+      setSendingSuggestion(false)
+    }
   }
 
   return (
@@ -404,8 +536,42 @@ export default function Dashboard(){
         </div>
       )}
 
+      <div className="section-tabs habit-tabs">
+        <button
+          className={`tab ${activeSection === "habits" ? "active" : ""}`}
+          onClick={() => setActiveSection("habits")}
+        >
+          � Нагадування
+        </button>
+        <button
+          className={`tab ${activeSection === "cycles" ? "active" : ""}`}
+          onClick={() => setActiveSection("cycles")}
+        >
+          🗂️ Звички
+        </button>
+      </div>
+
       <div className="add-habit-form">
-        <h3>Додай нову звичку</h3>
+        <h3>{activeSection === "cycles" ? "Додай нову звичку" : "Додай звичку з нагадуванням"}</h3>
+
+        {activeSection === "cycles" && (
+          <div className="cycle-days-picker">
+            <p className="picker-label">Оберіть дні повторення</p>
+            <div className="weekday-grid">
+              {WEEKDAY_OPTIONS.map((day) => (
+                <button
+                  key={day.value}
+                  type="button"
+                  className={`weekday-pill ${cycleDays.includes(day.value) ? "active" : ""}`}
+                  onClick={() => toggleCycleDay(day.value)}
+                  disabled={isBlocked}
+                >
+                  {day.short}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         
         <div className="form-row">
           <div className="form-group">
@@ -422,7 +588,7 @@ export default function Dashboard(){
 
         <div className="form-row">
           <div className="form-group">
-            <label>Дата (РРРР-ММ-ДД)</label>
+            <label>Дата (ДД-ММ-РРРР)</label>
             <input 
               type="date"
               value={date}
@@ -432,7 +598,7 @@ export default function Dashboard(){
           </div>
           
           <div className="form-group">
-            <label>Час (ГГ:ММ)</label>
+            <label>Час (ГГ:ХХ)</label>
             <input 
               type="time"
               value={time}
@@ -458,17 +624,41 @@ export default function Dashboard(){
         </button>
       </div>
 
+      <div className="habit-filters">
+        <button className={`tab ${habitFilter === "all" ? "active" : ""}`} onClick={() => setHabitFilter("all")}>
+          Усі
+        </button>
+        <button className={`tab ${habitFilter === "overdue" ? "active" : ""}`} onClick={() => setHabitFilter("overdue")}>
+          Просрочені
+        </button>
+        <button className={`tab ${habitFilter === "day" ? "active" : ""}`} onClick={() => setHabitFilter("day")}>
+          Окремі дні
+        </button>
+      </div>
+
+      {habitFilter === "day" && (
+        <div className="weekday-filter-row">
+          {WEEKDAY_OPTIONS.map((day) => (
+            <button
+              key={day.value}
+              className={`weekday-chip ${selectedWeekday === day.value ? "active" : ""}`}
+              onClick={() => setSelectedWeekday(day.value)}
+            >
+              {day.short}
+            </button>
+          ))}
+        </div>
+      )}
+
       <div className="habits-grid">
-        {habits.length === 0 ? (
+        {visibleHabits.length === 0 ? (
           <p className="no-habits">Нема звичок. Додай першу!</p>
         ) : (
-          habits
-            .sort((a, b) => new Date(a.date) - new Date(b.date))
-            .map(h => (
+          visibleHabits.map(h => (
               <HabitCard 
                 key={h._id}
                 habit={h}
-                onToggle={() => toggleComplete(h._id, h.completed)}
+                onToggle={() => toggleComplete(h._id, getHabitCompletionStatus(h))}
                 onDelete={() => deleteHabit(h._id)}
                 onShare={() => toggleShare(h)}
               />
@@ -476,6 +666,34 @@ export default function Dashboard(){
         )}
       </div>
 
+      <button className="floating-suggestion-btn" onClick={openSuggestionDialog} aria-label="Suggest new features">
+        💡 Пропозиції
+      </button>
+
+      {suggestionOpen && (
+        <div className="suggestion-modal-backdrop" onClick={closeSuggestionDialog}>
+          <div className={`suggestion-modal ${theme}`} onClick={(event) => event.stopPropagation()}>
+            <div className="suggestion-modal-header">
+              <h3>💡 Пропозиція</h3>
+              <button className="modal-close" onClick={closeSuggestionDialog} disabled={sendingSuggestion}>×</button>
+            </div>
+            <p className="suggestion-modal-text">Які ваші ідеї для покращення? Чого не вистачає? Що заважає користуватися додатком? Повідомлення побачить адміністратор окремо.</p>
+            <textarea
+              className="suggestion-textarea"
+              rows="6"
+              value={suggestionText}
+              onChange={(event) => setSuggestionText(event.target.value)}
+              disabled={sendingSuggestion}
+            />
+            <div className="suggestion-actions">
+              <button className="btn-secondary" onClick={closeSuggestionDialog} disabled={sendingSuggestion}>Скасувати</button>
+              <button className="btn-primary" onClick={submitSuggestion} disabled={sendingSuggestion}>
+                {sendingSuggestion ? "⏳ Надсилаємо..." : "📨 Відправити"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

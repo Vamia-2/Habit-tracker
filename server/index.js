@@ -3,7 +3,7 @@ import mongoose from "mongoose"
 import cors from "cors"
 import jwt from "jsonwebtoken"
 import http from "http"
-import { Server } from "socket.io"
+import net from "net"
 import path from "path"
 import { fileURLToPath } from "url"
 import dotenv from "dotenv"
@@ -11,8 +11,8 @@ import bcrypt from "bcryptjs"
 
 import User from "./models/User.js"
 import Habit from "./models/Habit.js"
-import Message from "./models/Message.js"
 import Complaint from "./models/Complaint.js"
+import Suggestion from "./models/Suggestion.js"
 import auth from "./middleware/auth.js"
 import { sendPush } from "./push.js"
 
@@ -37,6 +37,47 @@ const pick = (source, allowedKeys) => {
 
 const normalizeEmail = (email) => (typeof email === "string" ? email.trim().toLowerCase() : "")
 
+const normalizeCycleDays = (value) => {
+  if (!Array.isArray(value)) return []
+
+  return [...new Set(
+    value
+      .map((day) => Number(day))
+      .filter((day) => Number.isInteger(day) && day >= 0 && day <= 6)
+  )].sort((a, b) => a - b)
+}
+
+const toLocalDayKey = (date) => {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return null
+
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`
+}
+
+const parseDueAt = (dateValue, dueTime) => {
+  const date = new Date(dateValue)
+  if (Number.isNaN(date.getTime())) return null
+
+  const hasExplicitTimeInDateString =
+    typeof dateValue === "string" && /T\d{2}:\d{2}/.test(dateValue)
+
+  if (!hasExplicitTimeInDateString && typeof dueTime === "string" && /^\d{2}:\d{2}$/.test(dueTime)) {
+    const [hours, minutes] = dueTime.split(":").map(Number)
+    date.setHours(hours, minutes, 0, 0)
+  }
+
+  return date
+}
+
+const setTimeOnDate = (sourceDate, dueTime) => {
+  const date = new Date(sourceDate)
+  const [hours, minutes] = typeof dueTime === "string" && /^\d{2}:\d{2}$/.test(dueTime)
+    ? dueTime.split(":").map(Number)
+    : [9, 0]
+
+  date.setHours(hours, minutes, 0, 0)
+  return date
+}
+
 const allowedOrigins = [
   process.env.FRONTEND_URL,
   "http://localhost:5173",
@@ -45,9 +86,13 @@ const allowedOrigins = [
   "http://127.0.0.1:5000"
 ].filter(Boolean)
 
+const isLocalDevOrigin = (origin) => {
+  return /^https?:\/\/(localhost|127\.0\.0\.1):\d+$/i.test(origin)
+}
+
 const corsOptions = {
   origin: (origin, callback) => {
-    if (!origin || allowedOrigins.includes(origin)) {
+    if (!origin || allowedOrigins.includes(origin) || isLocalDevOrigin(origin)) {
       callback(null, true)
     } else {
       callback(new Error(`CORS blocked by origin: ${origin}`))
@@ -108,36 +153,77 @@ mongoose.connect(process.env.MONGO_URI, {
   }
 
       const startReminderScheduler = () => {
-        const reminderWindowMs = 5 * 60 * 1000
+        const staleReminderToleranceMs = 24 * 60 * 60 * 1000
         const checkIntervalMs = 60 * 1000
 
         const sendPendingReminders = async () => {
           try {
             const now = new Date()
-            const windowStart = new Date(now.getTime() - reminderWindowMs)
             const windowEnd = new Date(now.getTime() + checkIntervalMs)
+            const oldestAllowedDueAt = new Date(now.getTime() - staleReminderToleranceMs)
 
             const habits = await Habit.find({
               reminder: true,
-              completed: false,
-              deleted: false,
-              reminderSentAt: null
+              deleted: false
             }).populate("user", "pushSubscription username email")
 
             for (const habit of habits) {
               if (!habit.user?.pushSubscription) continue
-              if (!habit.dueTime || !habit.date) continue
+              if (!habit.date) continue
 
-              const dueDate = new Date(habit.date)
-              const [hours, minutes] = habit.dueTime.split(":").map(Number)
-              if (Number.isNaN(hours) || Number.isNaN(minutes)) continue
-              dueDate.setHours(hours, minutes, 0, 0)
+              const cycleDays = normalizeCycleDays(habit.cycleDays)
+              const isRecurring = cycleDays.length > 0
+              const dueAt = parseDueAt(habit.date, habit.dueTime)
+              if (!dueAt) continue
 
-              if (dueDate < windowStart || dueDate > windowEnd) continue
+              if (isRecurring) {
+                const today = new Date()
+                if (!cycleDays.includes(today.getDay())) continue
+
+                const todayKey = toLocalDayKey(today)
+                const lastReminderKey = habit.reminderSentAt ? toLocalDayKey(new Date(habit.reminderSentAt)) : null
+                
+                // Reset if completion is from past day
+                const completedTodayKey = habit.completedAt ? toLocalDayKey(new Date(habit.completedAt)) : null
+                if (habit.completed && completedTodayKey !== todayKey) {
+                  habit.completed = false
+                  habit.completedAt = null
+                  await habit.save()
+                }
+
+                // Skip if already reminded today or already completed today
+                if (lastReminderKey === todayKey || (habit.completed && completedTodayKey === todayKey)) continue
+
+                const recurringDueAt = setTimeOnDate(today, habit.dueTime)
+                if (today < recurringDueAt) continue
+
+                const payload = {
+                  title: `🔔 Нагадування: ${habit.title}`,
+                  body: `Цикл на сьогодні: ${today.toLocaleDateString("uk-UA")} о ${recurringDueAt.toLocaleTimeString("uk-UA", { hour: "2-digit", minute: "2-digit" })}`
+                }
+
+                try {
+                  await sendPush(habit.user.pushSubscription, payload)
+                  habit.reminderSentAt = new Date()
+                  await habit.save()
+                  console.log(`⏰ Push reminder sent for recurring habit ${habit._id}`)
+                } catch (e) {
+                  console.error("❌ Не вдалося відправити нагадування для циклічної звички:", habit._id, e)
+                }
+
+                continue
+              }
+
+              if (habit.completed) continue
+              if (habit.reminderSentAt) continue
+
+              if (dueAt > windowEnd || dueAt < oldestAllowedDueAt) continue
+
+              const dueTimeLabel = habit.dueTime || dueAt.toLocaleTimeString("uk-UA", { hour: "2-digit", minute: "2-digit" })
 
               const payload = {
                 title: `🔔 Нагадування: ${habit.title}`,
-                body: `Звичка запланована на ${dueDate.toLocaleDateString("uk-UA")} о ${habit.dueTime}`
+                body: `Звичка запланована на ${dueAt.toLocaleDateString("uk-UA")} о ${dueTimeLabel}`
               }
 
               try {
@@ -167,38 +253,7 @@ mongoose.connect(process.env.MONGO_URI, {
       process.exit(1)
     })
 
-// ✅ SOCKET (Chat + Real-time)
-const server = http.createServer(app)
-const io = new Server(server, {
-  cors: {
-    origin: allowedOrigins,
-    methods: ["GET", "POST"],
-    credentials: true
-  }
-})
-
-let onlineUsers = {}
-
-io.on("connection",(socket)=>{
-  socket.on("join",(id)=>{
-    onlineUsers[id] = socket.id
-  })
-
-  socket.on("sendMessage", async (data)=>{
-    await Message.create(data)
-    if(onlineUsers[data.receiver]){
-      io.to(onlineUsers[data.receiver]).emit("newMessage", data)
-    }
-  })
-
-  socket.on("disconnect",()=>{
-    for(let id in onlineUsers){
-      if(onlineUsers[id] === socket.id){
-        delete onlineUsers[id]
-      }
-    }
-  })
-})
+// Socket / chat removed (chat replaced by complaint flow)
 
 // ✅ AUTH
 app.post("/api/register", async(req,res)=>{
@@ -389,15 +444,26 @@ const ensureNotBlocked = (req, res, next) => {
 }
 
 app.post("/api/habits", auth, ensureNotBlocked, async(req,res)=>{
-  const allowedFields = pick(req.body, ["title", "date", "dueTime", "reminder", "public", "notes", "commentsEnabled"])
+  const allowedFields = pick(req.body, ["title", "date", "dueTime", "reminder", "public", "notes", "commentsEnabled", "cycleDays"])
   if (!allowedFields.title || !allowedFields.date || !allowedFields.dueTime) {
     return res.status(400).json("Потрібні title, date і dueTime")
   }
 
+  allowedFields.cycleDays = normalizeCycleDays(allowedFields.cycleDays)
+
   const habit = await Habit.create({
     ...allowedFields,
+    reminderSentAt: null,
     user:req.user.id
   })
+
+  const habits = await Habit.find({ user: req.user.id, deleted: false }).sort({ createdAt: -1 }).select("_id")
+  const maxHabits = 20
+  if (habits.length > maxHabits) {
+    const excessIds = habits.slice(maxHabits).map((item) => item._id)
+    await Habit.deleteMany({ _id: { $in: excessIds } })
+  }
+
   res.json(habit)
 })
 
@@ -411,6 +477,7 @@ app.put("/api/habits/:id", auth, ensureNotBlocked, async(req,res)=>{
     "date",
     "dueTime",
     "reminder",
+    "cycleDays",
     "completed",
     "completedAt",
     "public",
@@ -423,7 +490,11 @@ app.put("/api/habits/:id", auth, ensureNotBlocked, async(req,res)=>{
     return res.status(400).json("Немає дозволених полів для оновлення")
   }
 
-  const reminderConfigTouched = ["date", "dueTime", "reminder"].some((key) =>
+  if (Object.prototype.hasOwnProperty.call(allowedUpdates, "cycleDays")) {
+    allowedUpdates.cycleDays = normalizeCycleDays(allowedUpdates.cycleDays)
+  }
+
+  const reminderConfigTouched = ["date", "dueTime", "reminder", "cycleDays"].some((key) =>
     Object.prototype.hasOwnProperty.call(allowedUpdates, key)
   )
 
@@ -432,7 +503,12 @@ app.put("/api/habits/:id", auth, ensureNotBlocked, async(req,res)=>{
   }
 
   if (Object.prototype.hasOwnProperty.call(allowedUpdates, "completed")) {
-    allowedUpdates.reminderSentAt = allowedUpdates.completed ? new Date() : null
+    if (allowedUpdates.completed) {
+      allowedUpdates.completedAt = new Date()
+      allowedUpdates.reminderSentAt = new Date()
+    } else {
+      allowedUpdates.completedAt = null
+    }
   }
 
   Object.assign(habit, allowedUpdates)
@@ -511,16 +587,7 @@ app.get("/api/user/:id/stats", auth, async(req,res)=>{
   })
 })
 
-// ✅ MESSAGES
-app.get("/api/messages/:userId", auth, async(req,res)=>{
-  const messages = await Message.find({
-    $or: [
-      {sender: req.user.id, receiver: req.params.userId},
-      {sender: req.params.userId, receiver: req.user.id}
-    ]
-  }).sort({createdAt: 1})
-  res.json(messages)
-})
+// Messages API removed (chat converted to complaints)
 
 // ✅ COMPLAINTS
 app.post("/api/complaint", auth, ensureNotBlocked, async(req,res)=>{
@@ -583,6 +650,63 @@ app.delete("/api/complaint/:id", auth, async(req,res)=>{
   res.json({ message: "Complaint deleted" })
 })
 
+app.post("/api/suggestions", auth, async(req,res)=>{
+  try {
+    const text = typeof req.body.text === "string" ? req.body.text.trim() : ""
+    if (!text) return res.status(400).json("Потрібен текст пропозиції")
+
+    const suggestion = await Suggestion.create({
+      reporter: req.user.id,
+      reporterEmail: req.user.email || null,
+      text
+    })
+
+    res.json(suggestion)
+  } catch (err) {
+    res.status(400).json(err.message || "Помилка при створенні пропозиції")
+  }
+})
+
+app.get("/api/suggestions", auth, async(req,res)=>{
+  try {
+    if(req.user.role !== "admin") return res.sendStatus(403)
+    const suggestions = await Suggestion.find().sort({ createdAt: -1 }).populate("reporter", "username email")
+    res.json(suggestions)
+  } catch (err) {
+    res.status(500).json(err.message || "Помилка при отриманні пропозицій")
+  }
+})
+
+app.put("/api/suggestion/:id", auth, async(req,res)=>{
+  try {
+    if(req.user.role !== "admin") return res.sendStatus(403)
+
+    const suggestion = await Suggestion.findById(req.params.id)
+    if(!suggestion) return res.status(404).json("Suggestion not found")
+
+    const status = req.body.status === "read" ? "read" : suggestion.status
+    const updated = await Suggestion.findByIdAndUpdate(
+      req.params.id,
+      { status, adminComment: req.body.adminComment || suggestion.adminComment, resolvedAt: status === "read" ? new Date() : suggestion.resolvedAt },
+      { new: true }
+    ).populate("reporter", "username email")
+
+    res.json(updated)
+  } catch (err) {
+    res.status(500).json(err.message || "Помилка при оновленні пропозиції")
+  }
+})
+
+app.delete("/api/suggestion/:id", auth, async(req,res)=>{
+  try {
+    if(req.user.role !== "admin") return res.sendStatus(403)
+    await Suggestion.findByIdAndDelete(req.params.id)
+    res.json({ message: "Suggestion deleted" })
+  } catch (err) {
+    res.status(500).json(err.message || "Помилка при видаленні пропозиції")
+  }
+})
+
 // ✅ ADMIN
 app.get("/api/admin/users", auth, async(req,res)=>{
   if(req.user.role !== "admin") return res.sendStatus(403)
@@ -637,12 +761,7 @@ app.delete("/api/admin/user/:userId", auth, async(req,res)=>{
 
   await Promise.all([
     Habit.deleteMany({ user: req.params.userId }),
-    Message.deleteMany({
-      $or: [
-        { sender: req.params.userId },
-        { receiver: req.params.userId }
-      ]
-    }),
+    // Message model removed; chat/messages cleaned up
     Complaint.deleteMany({
       $or: [
         { reporter: req.params.userId },
@@ -683,6 +802,13 @@ app.post("/api/push/send", auth, async(req,res)=>{
     res.json("Push sent")
   } catch (e) {
     console.error("Push send error:", e)
+
+    const statusCode = e?.statusCode || e?.status
+    if (statusCode === 404 || statusCode === 410) {
+      await User.findByIdAndUpdate(req.user.id, { pushSubscription: null })
+      return res.status(410).json("Push subscription expired. Please re-enable notifications.")
+    }
+
     res.status(500).json("Failed to send push notification")
   }
 })
@@ -739,4 +865,47 @@ app.use((req,res)=>{
 
 // ✅ PORT (Render)
 const PORT = process.env.PORT || 5000
-server.listen(PORT,()=>console.log("SERVER RUNNING"))
+
+const canListenOnPort = (port) => {
+  return new Promise((resolve) => {
+    const tester = net.createServer()
+
+    tester.once("error", (error) => {
+      if (error?.code === "EADDRINUSE") {
+        resolve(false)
+      } else {
+        console.error("❌ Port check failed:", error)
+        resolve(false)
+      }
+    })
+
+    tester.once("listening", () => {
+      tester.close(() => resolve(true))
+    })
+
+    tester.listen(port, "0.0.0.0")
+  })
+}
+
+const startServer = async () => {
+  const portAvailable = await canListenOnPort(PORT)
+
+  if (!portAvailable) {
+    console.log(`ℹ️ Port ${PORT} is already in use. Another server instance is probably running.`)
+    process.exit(0)
+  }
+
+  const listener = app.listen(PORT, () => console.log(`SERVER RUNNING on port ${PORT}`))
+
+  listener.on("error", (error) => {
+    if (error?.code === "EADDRINUSE") {
+      console.log(`ℹ️ Port ${PORT} is already in use. Exiting cleanly.`)
+      process.exit(0)
+      return
+    }
+
+    console.error("❌ Server error while starting:", error)
+  })
+}
+
+startServer()

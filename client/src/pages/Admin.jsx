@@ -9,7 +9,8 @@ export default function Admin(){
   const [users, setUsers] = useState([])
   const [habitsStats, setHabitsStats] = useState(null)
   const [complaints, setComplaints] = useState([])
-  const [tab, setTab] = useState("users") // users, stats, complaints
+  const [suggestions, setSuggestions] = useState([])
+  const [tab, setTab] = useState("users") // users, stats, complaints, suggestions
   const [userSearch, setUserSearch] = useState("")
   const [blockDays, setBlockDays] = useState(7)
   const [selectedUser, setSelectedUser] = useState(null)
@@ -24,15 +25,17 @@ export default function Admin(){
         return
       }
 
-      const [usersRes, habitsStatsRes, complaintsRes] = await Promise.all([
+      const [usersRes, habitsStatsRes, complaintsRes, suggestionsRes] = await Promise.all([
         api.get("/admin/users"),
         api.get("/admin/habits-stats"),
-        api.get("/complaints")
+        api.get("/complaints"),
+        api.get("/suggestions")
       ])
 
       setUsers(usersRes.data)
       setHabitsStats(habitsStatsRes.data)
       setComplaints(complaintsRes.data)
+      setSuggestions(suggestionsRes.data)
     } catch(e) {
       const status = e?.response?.status
       if (status === 401) {
@@ -68,6 +71,26 @@ export default function Admin(){
       load()
     } catch(e) {
       alert("Не вдалося видалити скаргу")
+    }
+  }
+
+  const markSuggestionRead = async (suggestionId) => {
+    try {
+      await api.put(`/suggestion/${suggestionId}`, { status: "read" })
+      alert("Пропозицію позначено як прочитану")
+      load()
+    } catch(e) {
+      alert("Не вдалося оновити пропозицію")
+    }
+  }
+
+  const deleteSuggestion = async (suggestionId) => {
+    try {
+      await api.delete(`/suggestion/${suggestionId}`)
+      alert("Пропозицію видалено")
+      load()
+    } catch(e) {
+      alert("Не вдалося видалити пропозицію")
     }
   }
 
@@ -150,6 +173,12 @@ export default function Admin(){
             onClick={() => setTab("complaints")}
           >
             📣 Скарги ({complaints.length})
+          </button>
+          <button 
+            className={`tab ${tab === "suggestions" ? "active" : ""}`}
+            onClick={() => setTab("suggestions")}
+          >
+            💡 Пропозиції ({suggestions.length})
           </button>
         </div>
 
@@ -367,6 +396,48 @@ export default function Admin(){
                 </div>
               )) : (
                 <p>Немає нових скарг.</p>
+              )}
+            </div>
+          </div>
+        )}
+
+        {tab === "suggestions" && (
+          <div className="admin-content">
+            <h2>💡 Керування пропозиціями</h2>
+            <div className="complaints-list">
+              {suggestions.length > 0 ? suggestions.map((suggestion) => (
+                <div key={suggestion._id} className={`complaint-card ${suggestion.status || 'pending'}`}>
+                  <div className="complaint-header">
+                    <div>
+                      <h3>Пропозиція</h3>
+                      <p>Від: {suggestion.reporter?.username || suggestion.reporter?.email || suggestion.reporterEmail}</p>
+                    </div>
+                    <span className="complaint-badge">
+                      {suggestion.status === 'read' ? 'ПРОЧИТАНО' : 'НОВА'}
+                    </span>
+                  </div>
+                  <div className="complaint-body">
+                    <p>{suggestion.text}</p>
+                    <p><strong>Дата:</strong> {new Date(suggestion.createdAt).toLocaleString()}</p>
+                  </div>
+                  <div className="complaint-actions">
+                    <button
+                      className="btn-success"
+                      onClick={() => markSuggestionRead(suggestion._id)}
+                      disabled={suggestion.status === 'read'}
+                    >
+                      Позначити прочитаною
+                    </button>
+                    <button
+                      className="btn-danger"
+                      onClick={() => deleteSuggestion(suggestion._id)}
+                    >
+                      Видалити
+                    </button>
+                  </div>
+                </div>
+              )) : (
+                <p>Немає нових пропозицій.</p>
               )}
             </div>
           </div>

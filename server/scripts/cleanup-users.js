@@ -5,7 +5,7 @@ import dotenv from "dotenv"
 
 import User from "../models/User.js"
 import Habit from "../models/Habit.js"
-import Message from "../models/Message.js"
+// Message model removed; chat/messages feature deprecated
 import Complaint from "../models/Complaint.js"
 
 const __filename = fileURLToPath(import.meta.url)
@@ -113,14 +113,8 @@ async function main() {
       return
     }
 
-    const [habitsDeleted, messagesDeleted, complaintsDeleted, userLinksUpdated, usersDeleted] = await Promise.all([
+    const [habitsDeleted, complaintsDeleted, userLinksUpdated, usersDeleted] = await Promise.all([
       Habit.deleteMany({ user: { $in: ids } }),
-      Message.deleteMany({
-        $or: [
-          { sender: { $in: ids } },
-          { receiver: { $in: ids } }
-        ]
-      }),
       Complaint.deleteMany({
         $or: [
           { reporter: { $in: ids } },
@@ -133,7 +127,6 @@ async function main() {
 
     console.log(`Видалено користувачів: ${usersDeleted.deletedCount || 0}`)
     console.log(`Видалено звичок: ${habitsDeleted.deletedCount || 0}`)
-    console.log(`Видалено повідомлень: ${messagesDeleted.deletedCount || 0}`)
     console.log(`Видалено скарг: ${complaintsDeleted.deletedCount || 0}`)
     console.log(`Оновлено зв'язків між користувачами: ${userLinksUpdated.modifiedCount || 0}`)
   } finally {

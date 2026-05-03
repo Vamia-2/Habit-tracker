@@ -7,10 +7,13 @@ import Admin from "./pages/Admin.jsx"
 import Complaint from "./pages/Complaint.jsx"
 import Achievements from "./pages/Achievements.jsx"
 import PublicAchievements from "./pages/PublicAchievements.jsx"
+import Cycles from "./pages/Cycles.jsx"
+import ToastHost from "./components/ToastHost.jsx"
 
 export default function App(){
   return(
     <BrowserRouter>
+      <ToastHost/>
       <Routes>
         <Route path="/" element={<Dashboard/>}/>
         <Route path="/login" element={<Login/>}/>
@@ -19,6 +22,7 @@ export default function App(){
         <Route path="/complaint" element={<Complaint/>}/>
         <Route path="/achievements" element={<Achievements/>}/>
         <Route path="/public-achievements" element={<PublicAchievements/>}/>
+        <Route path="/cycles" element={<Cycles/>}/>
       </Routes>
     </BrowserRouter>
   )

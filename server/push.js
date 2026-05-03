@@ -13,6 +13,13 @@ webpush.setVapidDetails(
   process.env.PRIVATE_KEY
 )
 
-export const sendPush = (sub, data) => {
-  return webpush.sendNotification(sub, JSON.stringify(data))
+export const sendPush = (sub, data, opts = {}) => {
+  const payload = JSON.stringify(data)
+  const options = {
+    TTL: typeof opts.TTL === 'number' ? opts.TTL : 60 * 60, // default 1 hour
+    // Add high urgency header when requested to encourage delivery on mobile
+    headers: Object.assign({}, opts.headers || {}, { Urgency: opts.urgency || 'high' })
+  }
+
+  return webpush.sendNotification(sub, payload, options)
 }

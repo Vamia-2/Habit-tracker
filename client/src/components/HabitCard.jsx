@@ -5,11 +5,34 @@ export default function HabitCard({ habit, onToggle, onDelete, onShare }) {
   const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate())
   const startOfHabitDay = new Date(habitDate.getFullYear(), habitDate.getMonth(), habitDate.getDate())
   const dayDifference = Math.round((startOfHabitDay - startOfToday) / msPerDay)
-  const isOverdue = habitDate < today
+  
+  // Для циклічних звичок - показувати як сьогоднішню якщо це відповідний день
+  const isRecurring = Array.isArray(habit.cycleDays) && habit.cycleDays.length > 0
+  const todayWeekday = today.getDay()
+  const isToday = dayDifference === 0 || (isRecurring && habit.cycleDays.includes(todayWeekday))
+  
+  // Статус дня: для циклічних - перевіряємо за completedAt, для звичних - за completed
+  const getCompletionStatus = () => {
+    if (!isRecurring) {
+      return habit.completed
+    }
+    // Для циклічних: розпізнаємо, чи виконана сьогодні
+    if (!habit.completedAt) return false
+    const completedDate = new Date(habit.completedAt)
+    const completedKey = `${completedDate.getFullYear()}-${String(completedDate.getMonth() + 1).padStart(2, "0")}-${String(completedDate.getDate()).padStart(2, "0")}`
+    const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`
+    return completedKey === todayKey
+  }
+
+  const isCompleted = getCompletionStatus()
+  const isOverdue = habitDate < today && !isRecurring
   const overdueDays = isOverdue && dayDifference !== 0 ? Math.abs(dayDifference) : 0
 
   // Визначаємо колір на основі близькості до дати
   const getColorByProximity = () => {
+    if (isRecurring) {
+      return habit.cycleDays.includes(todayWeekday) ? "#e67e22" : "#3498db"
+    }
     if (isOverdue) return "#e74c3c" // Червоний - вже пройшло
     if (dayDifference === 0) return "#e67e22" // Сьогодні
     if (dayDifference === 1) return "#f39c12" // Завтра
@@ -37,7 +60,26 @@ export default function HabitCard({ habit, onToggle, onDelete, onShare }) {
     return time || "09:00"
   }
 
+  const formatCycleDays = (cycleDays) => {
+    if (!Array.isArray(cycleDays) || cycleDays.length === 0) return null
+
+    const labels = {
+      0: "Нд",
+      1: "Пн",
+      2: "Вт",
+      3: "Ср",
+      4: "Чт",
+      5: "Пт",
+      6: "Сб"
+    }
+
+    return cycleDays.slice().sort((a, b) => a - b).map((day) => labels[day] || day).join(", ")
+  }
+
   const getProximityText = () => {
+    if (isRecurring) {
+      return `Цикл: ${formatCycleDays(habit.cycleDays)}`
+    }
     if (isOverdue) {
       if (overdueDays === 0) return "Сьогодні"
       return `${overdueDays} днів тому`
@@ -72,18 +114,21 @@ export default function HabitCard({ habit, onToggle, onDelete, onShare }) {
         <span className="proximity" style={{ color: getColorByProximity() }}>
           {getProximityText()}
         </span>
+        {formatCycleDays(habit.cycleDays) && (
+          <span className="cycle-badge">🔁 {formatCycleDays(habit.cycleDays)}</span>
+        )}
       </div>
 
       <div className="habit-actions">
         <button 
-          className={`btn-toggle ${habit.completed ? "completed" : ""}`}
+          className={`btn-toggle ${isCompleted ? "completed" : ""}`}
           onClick={onToggle}
-          title={habit.completed ? "Позначити як невиконано" : "Позначити як виконано"}
+          title={isCompleted ? "Позначити як невиконано" : "Позначити як виконано"}
         >
-          {habit.completed ? "✅ Виконано" : "⭕ Невиконано"}
+          {isCompleted ? "✅ Виконано" : "⭕ Невиконано"}
         </button>
 
-        {habit.completed && onShare && (
+        {isCompleted && onShare && (
           <button
             className={`btn-share ${habit.public ? "shared" : ""}`}
             onClick={onShare}
