@@ -8,6 +8,8 @@ import path from "path"
 import { fileURLToPath } from "url"
 import dotenv from "dotenv"
 import bcrypt from "bcryptjs"
+import crypto from "crypto"
+import nodemailer from "nodemailer"
 
 import User from "./models/User.js"
 import Habit from "./models/Habit.js"
@@ -22,6 +24,40 @@ const __dirname = path.dirname(__filename)
 dotenv.config({ path: path.join(__dirname, "../.env") })
 
 const app = express()
+
+// ✅ Email transporter
+const emailTransporter = nodemailer.createTransport({
+  host: process.env.EMAIL_HOST || "smtp.gmail.com",
+  port: Number(process.env.EMAIL_PORT) || 587,
+  secure: process.env.EMAIL_SECURE === "true",
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS
+  }
+})
+
+const sendVerificationEmail = async (to, token) => {
+  const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173"
+  const verifyUrl = `${frontendUrl}/verify-email?token=${token}`
+  const from = process.env.EMAIL_FROM || process.env.EMAIL_USER || "noreply@habit-tracker.com"
+
+  await emailTransporter.sendMail({
+    from,
+    to,
+    subject: "Підтвердіть вашу електронну пошту — Habit Tracker",
+    html: `
+      <div style="font-family: 'Segoe UI', sans-serif; max-width: 480px; margin: 0 auto; padding: 24px; border-radius: 12px; border: 1px solid #e2e8f0;">
+        <h2 style="margin-bottom: 8px;">🎯 Habit Tracker</h2>
+        <p style="color: #475569;">Дякуємо за реєстрацію! Натисніть кнопку нижче, щоб підтвердити вашу електронну пошту.</p>
+        <a href="${verifyUrl}" style="display: inline-block; margin: 24px 0; padding: 12px 28px; background: #6366f1; color: #fff; border-radius: 8px; text-decoration: none; font-weight: 600;">
+          Підтвердити email
+        </a>
+        <p style="color: #94a3b8; font-size: 13px;">Посилання дійсне протягом 24 годин. Якщо ви не реєструвалися — просто ігноруйте цей лист.</p>
+        <p style="color: #cbd5e1; font-size: 12px; margin-top: 8px; word-break: break-all;">${verifyUrl}</p>
+      </div>
+    `
+  })
+}
 
 const isValidObjectId = (value) => mongoose.Types.ObjectId.isValid(value)
 
@@ -131,7 +167,8 @@ mongoose.connect(process.env.MONGO_URI, {
           email: adminEmail,
           password: hashedPassword,
           username: process.env.DEFAULT_ADMIN_USERNAME?.trim() || "admin",
-          role: "admin"
+          role: "admin",
+          isVerified: true
         })
         console.log("👑 Стартовий адміністратор створений через .env")
       } else if (adminExists.role !== "admin") {
@@ -270,20 +307,31 @@ app.post("/api/register", async(req,res)=>{
       return res.status(400).json("Пароль повинен містити мінімум 6 символів")
     }
 
+    const verificationToken = crypto.randomBytes(32).toString("hex")
+    const verificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 годин
+
     const hashedPassword = await bcrypt.hash(password, 10)
     const user = await User.create({
       email: normalizedEmail,
       password: hashedPassword,
-      username: username.trim()
+      username: username.trim(),
+      isVerified: false,
+      emailVerificationToken: verificationToken,
+      emailVerificationExpires: verificationExpires
     })
 
+    try {
+      await sendVerificationEmail(normalizedEmail, verificationToken)
+    } catch (emailErr) {
+      console.error("Помилка надсилання email підтвердження:", emailErr)
+      // Видаляємо користувача, якщо email не вдалося надіслати
+      await User.findByIdAndDelete(user._id)
+      return res.status(500).json("Не вдалося надіслати email підтвердження. Перевірте правильність адреси та спробуйте знову.")
+    }
+
     res.json({
-      message: "Користувач успішно зареєстрований",
-      user: {
-        id: user._id,
-        email: user.email,
-        username: user.username
-      }
+      message: "Реєстрацію успішно завершено. Перевірте вашу електронну пошту для підтвердження акаунта.",
+      email: user.email
     })
   } catch(e) {
     console.error("Registration error:", e)
@@ -319,6 +367,10 @@ app.post("/api/login", async(req,res)=>{
       return res.status(403).json("Аккаунт заблоковано")
     }
 
+    if (!user.isVerified) {
+      return res.status(403).json("Будь ласка, підтвердіть вашу електронну пошту перед входом")
+    }
+
     const match = await bcrypt.compare(password, user.password)
     if(!match) return res.status(401).json("Невірний пароль")
 
@@ -342,6 +394,70 @@ app.post("/api/login", async(req,res)=>{
     res.status(500).json("Помилка сервера при вході")
   }
 })
+
+// ✅ EMAIL VERIFICATION
+app.get("/api/verify-email/:token", async(req,res)=>{
+  try {
+    const { token } = req.params
+
+    if (!token) {
+      return res.status(400).json("Токен підтвердження відсутній")
+    }
+
+    const user = await User.findOne({
+      emailVerificationToken: token,
+      emailVerificationExpires: { $gt: new Date() }
+    })
+
+    if (!user) {
+      return res.status(400).json("Посилання для підтвердження недійсне або термін його дії закінчився")
+    }
+
+    user.isVerified = true
+    user.emailVerificationToken = null
+    user.emailVerificationExpires = null
+    await user.save()
+
+    res.json({ message: "Email успішно підтверджено! Тепер ви можете увійти." })
+  } catch(e) {
+    console.error("Verify email error:", e)
+    res.status(500).json("Помилка сервера при підтвердженні email")
+  }
+})
+
+app.post("/api/resend-verification", async(req,res)=>{
+  try {
+    const { email } = req.body
+    const normalizedEmail = normalizeEmail(email)
+
+    if (!normalizedEmail) {
+      return res.status(400).json("Email обов'язковий")
+    }
+
+    const user = await User.findOne({ email: normalizedEmail })
+
+    if (!user) {
+      return res.status(404).json("Користувач не знайдений")
+    }
+
+    if (user.isVerified) {
+      return res.status(400).json("Цей акаунт вже підтверджено")
+    }
+
+    const verificationToken = crypto.randomBytes(32).toString("hex")
+    user.emailVerificationToken = verificationToken
+    user.emailVerificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000)
+    await user.save()
+
+    await sendVerificationEmail(normalizedEmail, verificationToken)
+
+    res.json({ message: "Лист підтвердження надіслано повторно. Перевірте вашу пошту." })
+  } catch(e) {
+    console.error("Resend verification error:", e)
+    res.status(500).json("Помилка сервера при повторному надсиланні листа")
+  }
+})
+
 
 // ✅ USER PROFILE
 app.get("/api/user/:id", auth, async(req,res)=>{
