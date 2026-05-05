@@ -45,6 +45,11 @@ self.addEventListener('message', (event) => {
   }
 })
 
+const isMobileDevice = () => {
+  const userAgent = self.navigator?.userAgent || ''
+  return /Android|iPhone|iPad|iPod|Mobi/i.test(userAgent)
+}
+
 // MAIN: Handle push notifications
 self.addEventListener("push", function(event) {
   const msg1 = "🔔 [SW] Push event received!"
@@ -76,14 +81,18 @@ self.addEventListener("push", function(event) {
     }
   }
 
+  const onMobile = isMobileDevice()
   const options = {
     body: data.body,
     icon: "/assets/icon-192.png",
     badge: "/assets/badge-72.png",
-    vibrate: [200, 100, 200],
+    vibrate: onMobile ? [200, 100, 200] : undefined,
     tag: 'habit-reminder', // Required when renotify is true
     renotify: true,
-    requireInteraction: !!data.requireInteraction,
+    // Desktop notifications should stay visible until the user interacts.
+    // Mobile devices keep the default OS-specific presentation.
+    requireInteraction: !onMobile,
+    silent: false,
     data: { url: data.url },
     actions: data.actions || [
       { action: "open", title: "Відкрити", icon: "/assets/icon-192.png" }
