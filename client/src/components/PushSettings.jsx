@@ -77,60 +77,79 @@ const getFriendlyPushError = (error) => {
 }
 
 export const subscribeToPushNotifications = async () => {
+  console.log("🔔 subscribeToPushNotifications started")
   if (typeof window === "undefined" || !('serviceWorker' in navigator) || !('PushManager' in window)) {
+    console.error("❌ Push not supported:", { hasWindow: typeof window !== "undefined", hasServiceWorker: 'serviceWorker' in navigator, hasPushManager: 'PushManager' in window })
     alert("Push-сповіщення не підтримуються у цьому браузері.")
     return false
   }
 
   if (typeof Notification !== "undefined" && Notification.permission === "denied") {
+    console.warn("⚠️ Notifications denied")
     alert("Push-сповіщення заблоковані у браузері. Дозвольте їх у налаштуваннях сайту.")
     return false
   }
 
   try {
+    console.log("🔔 Checking notification permission:", Notification.permission)
     if (typeof Notification !== "undefined" && Notification.permission === "default") {
+      console.log("🔔 Requesting notification permission...")
       const permission = await withTimeout(
         Notification.requestPermission(),
         "Запит дозволу на сповіщення завис. Спробуйте ще раз.",
         10000
       )
+      console.log("🔔 Permission response:", permission)
       if (permission !== "granted") {
         alert("Без дозволу на сповіщення push-нагадування не працюватимуть.")
         return false
       }
     }
 
+    console.log("🔔 Getting push public key...")
     const keyRes = await withTimeout(
       api.get("/push-public-key"),
       "Не вдалося отримати push-ключ. Перевірте сервер.",
       10000
     )
+    console.log("🔔 Got public key:", keyRes.data.publicKey?.substring(0, 20) + "...")
 
+    console.log("🔔 Registering Service Worker at /sw.js...")
     const reg = await withTimeout(
-      navigator.serviceWorker.register("/sw.js"),
+      navigator.serviceWorker.register(`/sw.js?v=${Date.now()}`),
       "Service worker не відповів вчасно.",
       12000
     )
+    console.log("🔔 Service Worker registered:", reg.scope)
+    console.log("🔔 Service Worker state:", reg.active?.state || reg.installing?.state || "unknown")
 
     // Ensure service worker is active before calling PushManager.subscribe.
+    console.log("🔔 Waiting for Service Worker ready...")
     const readyReg = await withTimeout(
       navigator.serviceWorker.ready,
       "Service Worker не готовий до push-підписки.",
       12000
     )
+    console.log("🔔 Service Worker ready")
     await waitForServiceWorkerActivation(readyReg)
+    console.log("🔔 Service Worker active")
 
     const requestSubscription = async () => {
+      console.log("🔔 Requesting push subscription...")
       const current = await readyReg.pushManager.getSubscription()
+      console.log("🔔 Current subscription:", current ? "exists" : "none")
       if (current) {
         try {
           await current.unsubscribe()
-        } catch {
+          console.log("🔔 Unsubscribed from old subscription")
+        } catch (e) {
+          console.warn("⚠️ Unsubscribe failed:", e.message)
           // Continue with fresh subscribe even if unsubscribe fails.
         }
       }
 
-      return withTimeout(
+      console.log("🔔 Subscribing to push with VAPID key...")
+      const subscription = await withTimeout(
         readyReg.pushManager.subscribe({
           userVisibleOnly: true,
           applicationServerKey: urlBase64ToUint8Array(keyRes.data.publicKey)
@@ -138,24 +157,32 @@ export const subscribeToPushNotifications = async () => {
         "Підписка на push зависла. Спробуйте ще раз.",
         12000
       )
+      console.log("🔔 Push subscription created:", subscription.endpoint.substring(0, 50) + "...")
+      return subscription
     }
 
+    console.log("🔔 Checking existing subscription...")
     let sub = await withTimeout(
       readyReg.pushManager.getSubscription(),
       "Не вдалося отримати поточну push-підписку.",
       10000
     )
+    console.log("🔔 Existing subscription:", sub ? "found" : "none")
 
     if (!sub) {
       sub = await requestSubscription()
     }
 
     const sendTestPush = async (subscription) => {
+      console.log("🔔 Saving subscription on server...")
       await withTimeout(
         api.post("/subscribe", subscription),
         "Не вдалося зберегти push-підписку на сервері.",
         10000
       )
+      console.log("🔔 Subscription saved successfully")
+      
+      console.log("🔔 Sending test push notification...")
       await withTimeout(
         api.post("/push/send", {
         title: "✅ Push увімкнено",
@@ -164,6 +191,7 @@ export const subscribeToPushNotifications = async () => {
         "Тестове push-сповіщення не дійшло вчасно.",
         12000
       )
+      console.log("🔔 Test push sent successfully")
     }
 
     try {
@@ -197,7 +225,28 @@ export default function PushSettings({ onSubscribed }){
     const checkSubscription = async () => {
       if (typeof window === "undefined" || !('serviceWorker' in navigator) || !('PushManager' in window)) return
       try {
-        const reg = await navigator.serviceWorker.register("/sw.js")
+        // Unregister old service workers first to clear cache
+        const registrations = await navigator.serviceWorker.getRegistrations()
+        for (let reg of registrations) {
+          await reg.unregister()
+          console.log("🔄 Unregistered old Service Worker")
+        }
+        
+        // Register with cache busting - add timestamp to force fresh load
+        const swUrl = `/sw.js?v=${Date.now()}`
+        console.log("📥 Registering Service Worker from:", swUrl)
+        const reg = await navigator.serviceWorker.register(swUrl)
+        
+        // Listen for messages from Service Worker
+        if (!window.swMessageListener) {
+          window.swMessageListener = true
+          navigator.serviceWorker.addEventListener('message', (event) => {
+            if (event.data?.type === 'sw_log') {
+              console.log("📋 [From SW]", event.data.msg)
+            }
+          })
+        }
+        
         const sub = await reg.pushManager.getSubscription()
         setIsSubscribed(Boolean(sub))
       } catch {
@@ -212,12 +261,34 @@ export default function PushSettings({ onSubscribed }){
     if (isWorking) return
     setIsWorking(true)
     try {
+      // Test 1: Simple browser notification (no Service Worker needed)
+      if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+        console.log("📢 Testing simple browser notification (no SW)...")
+        alert("🧪 About to test direct notification - watch for popup!")
+        new Notification('🧪 Test Notification', {
+          body: 'This is a direct notification WITHOUT Service Worker',
+          icon: '/assets/icon-192.png'
+        })
+        console.log("📢 Test notification shown!")
+        alert("✅ Direct notification test completed!")
+      } else {
+        alert(`⚠️ Notification permission: ${Notification.permission}`)
+      }
+
+      // Test 2: Full push setup
+      console.log("🔄 Starting full push setup...")
       const ok = await subscribeToPushNotifications()
+      console.log("🔄 Push setup result:", ok)
       if (ok) {
         setIsSubscribed(true)
         onSubscribed?.()
-        alert("Push нагадування увімкнено")
+        alert("✅ Push нагадування увімкнено")
+      } else {
+        alert("❌ Push setup failed - check console for details")
       }
+    } catch (err) {
+      console.error("❌ Error:", err)
+      alert(`❌ Error: ${err.message}`)
     } finally {
       setIsWorking(false)
     }
@@ -228,9 +299,4 @@ export default function PushSettings({ onSubscribed }){
       {isWorking ? "⏳ Підключення..." : isSubscribed ? "✅ Увімкнено" : "🔔 Нагадування"}
     </button>
   )
-}
-
-export const ensurePushNotificationsReady = async () => {
-  // Reuse the same flow: it already tests delivery and refreshes stale subscriptions.
-  return subscribeToPushNotifications()
 }

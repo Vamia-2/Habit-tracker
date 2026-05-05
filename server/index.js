@@ -3,6 +3,8 @@ import mongoose from "mongoose"
 import cors from "cors"
 import jwt from "jsonwebtoken"
 import http from "http"
+import https from "https"
+import fs from "fs"
 import net from "net"
 import path from "path"
 import { fileURLToPath } from "url"
@@ -11,6 +13,7 @@ import bcrypt from "bcryptjs"
 import crypto from "crypto"
 import nodemailer from "nodemailer"
 import rateLimit from "express-rate-limit"
+import selfsigned from 'selfsigned'
 
 import User from "./models/User.js"
 import Habit from "./models/Habit.js"
@@ -142,9 +145,19 @@ const setTimeOnDate = (sourceDate, dueTime) => {
 const allowedOrigins = [
   process.env.FRONTEND_URL,
   "http://localhost:5173",
+  "http://localhost:5174",
   "http://127.0.0.1:5173",
+  "http://127.0.0.1:5174",
   "http://localhost:5000",
-  "http://127.0.0.1:5000"
+  "http://127.0.0.1:5000",
+  "https://localhost:5173",
+  "https://localhost:5174",
+  "https://127.0.0.1:5173",
+  "https://127.0.0.1:5174",
+  "https://localhost:5176",
+  "https://127.0.0.1:5176",
+  "https://localhost:5000",
+  "https://127.0.0.1:5000"
 ].filter(Boolean)
 
 const isLocalDevOrigin = (origin) => {
@@ -161,6 +174,8 @@ const corsOptions = {
   },
   credentials: true
 }
+
+// Note: permissive CORS used only during debugging; ensure env is not set in production
 
 // ✅ CORS
 app.use(cors(corsOptions))
@@ -388,13 +403,6 @@ app.post("/api/login", authRateLimit, async(req,res)=>{
 
     if (user.isBlocked) {
       return res.status(403).json("Аккаунт заблоковано")
-    }
-
-    // Не просим верифікацію email для admin@gmail.com
-    const isAdminEmail = normalizedEmail === "admin@gmail.com"
-    
-    if (!user.isVerified && !isAdminEmail) {
-      return res.status(403).json({ code: "EMAIL_NOT_VERIFIED", message: "Будь ласка, підтвердіть вашу електронну пошту перед входом" })
     }
 
     const match = await bcrypt.compare(password, user.password)
@@ -929,29 +937,50 @@ app.get("/api/push-public-key", auth, async(req,res)=>{
 
 app.post("/api/subscribe", auth, async(req,res)=>{
   const subscription = req.body
-  if(!subscription || !subscription.endpoint) return res.status(400).json("Invalid subscription")
+  console.log("📥 Subscribe request from user:", req.user.id)
+  console.log("📥 Subscription endpoint:", subscription?.endpoint?.substring(0, 50) + "...")
+  
+  if(!subscription || !subscription.endpoint) {
+    console.error("❌ Invalid subscription received")
+    return res.status(400).json("Invalid subscription")
+  }
 
-  await User.findByIdAndUpdate(req.user.id, { pushSubscription: subscription })
-  res.json("Subscribed")
+  try {
+    await User.findByIdAndUpdate(req.user.id, { pushSubscription: subscription })
+    console.log("✅ Subscription saved for user:", req.user.id)
+    res.json("Subscribed")
+  } catch (e) {
+    console.error("❌ Error saving subscription:", e.message)
+    res.status(500).json("Failed to save subscription")
+  }
 })
 
 app.post("/api/push/send", auth, async(req,res)=>{
+  console.log("📬 Push send request from user:", req.user.id)
   const user = await User.findById(req.user.id)
-  if(!user?.pushSubscription) return res.status(400).json("Push subscription not found")
+  
+  if(!user?.pushSubscription) {
+    console.error("❌ Push subscription not found for user:", req.user.id)
+    return res.status(400).json("Push subscription not found")
+  }
 
+  console.log("📬 Found subscription:", user.pushSubscription.endpoint.substring(0, 50) + "...")
   const payload = {
     title: req.body.title || "Habit Tracker",
     body: req.body.body || "Тестове push-повідомлення"
   }
 
   try {
+    console.log("📬 Attempting to send push...")
     await sendPush(user.pushSubscription, payload)
+    console.log("✅ Push sent successfully")
     res.json("Push sent")
   } catch (e) {
-    console.error("Push send error:", e)
+    console.error("❌ Push send error:", e.message, "Status code:", e?.statusCode)
 
     const statusCode = e?.statusCode || e?.status
     if (statusCode === 404 || statusCode === 410) {
+      console.warn("⚠️ Subscription expired, cleaning up")
       await User.findByIdAndUpdate(req.user.id, { pushSubscription: null })
       return res.status(410).json("Push subscription expired. Please re-enable notifications.")
     }
@@ -1040,6 +1069,39 @@ const startServer = async () => {
   if (!portAvailable) {
     console.log(`ℹ️ Port ${PORT} is already in use. Another server instance is probably running.`)
     process.exit(0)
+  }
+
+  const useHttps = process.env.USE_HTTPS === 'true' || process.env.HTTPS === 'true'
+
+  if (useHttps) {
+    try {
+      const certPath = path.join(__dirname, "../localhost-cert.pem")
+      const keyPath = path.join(__dirname, "../localhost-key.pem")
+      const httpsOptions = fs.existsSync(certPath) && fs.existsSync(keyPath)
+        ? {
+            key: fs.readFileSync(keyPath),
+            cert: fs.readFileSync(certPath)
+          }
+        : (() => {
+            const attrs = selfsigned.generate([{ name: 'commonName', value: 'localhost' }], { days: 365, keySize: 2048, altNames: ['localhost', '127.0.0.1'] })
+            return { key: attrs.private, cert: attrs.cert }
+          })()
+
+      const server = https.createServer(httpsOptions, app)
+      server.listen(PORT, () => console.log(`SERVER RUNNING (HTTPS) on port ${PORT}`))
+
+      server.on('error', (error) => {
+        if (error?.code === 'EADDRINUSE') {
+          console.log(`ℹ️ Port ${PORT} is already in use. Exiting cleanly.`)
+          process.exit(0)
+          return
+        }
+        console.error('❌ Server error while starting (HTTPS):', error)
+      })
+      return
+    } catch (e) {
+      console.error('❌ Failed to start HTTPS server, falling back to HTTP:', e)
+    }
   }
 
   const listener = app.listen(PORT, () => console.log(`SERVER RUNNING on port ${PORT}`))

@@ -359,6 +359,7 @@ export default function Dashboard({ initialSection = "habits" }){
 
   const handleReminderChange = async (event) => {
     const shouldEnable = event.target.checked
+    console.log("🔔 Reminder toggle:", shouldEnable)
     
     if (!shouldEnable) {
       // Unchecking is always allowed
@@ -368,31 +369,24 @@ export default function Dashboard({ initialSection = "habits" }){
 
     // Checking the box - immediately mark as checked, then set up push
     setReminder(true)
-    
-    // Need to ensure push is set up
-    const hasPushSubscription = Boolean(user?.hasPushSubscription || user?.pushSubscription)
 
     try {
-      if (!hasPushSubscription) {
-        const enablePush = window.confirm("Щоб нагадування працювало, потрібно увімкнути push-сповіщення. Увімкнути зараз?")
-        if (!enablePush) {
-          alert("Для нагадувань потрібно увімкнути push-сповіщення.")
-          setReminder(false)
-          return
-        }
-      }
-
-      const { ensurePushNotificationsReady } = await import("../components/PushSettings")
+      console.log("🔔 Triggering push setup...")
+      // Просто одразу налаштовуємо push без запиту
+      const { ensurePushNotificationsReady } = await import("../utils/pushNotifications")
+      console.log("🔔 Calling ensurePushNotificationsReady...")
       const ready = await ensurePushNotificationsReady()
+      console.log("🔔 Push setup result:", ready)
       
       if (!ready) {
+        console.log("🔔 Push setup failed, unchecking reminder")
         setReminder(false)
         return
       }
 
       await load()
     } catch (error) {
-      console.error("Error enabling reminder:", error)
+      console.error("❌ Error enabling reminder:", error)
       alert(`Помилка при увімкненні нагадувань: ${error.message || error}`)
       setReminder(false)
     }

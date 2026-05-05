@@ -11,6 +11,7 @@ export default function Login(){
   const [notVerified, setNotVerified] = useState(false)
   const [resendLoading, setResendLoading] = useState(false)
   const [resendMsg, setResendMsg] = useState("")
+  const [firstAttempt, setFirstAttempt] = useState(true)
   const navigate = useNavigate()
   const { theme, toggleTheme } = useTheme()
 
@@ -41,6 +42,7 @@ export default function Login(){
   const resendVerification = async () => {
     setResendLoading(true)
     setResendMsg("")
+    setFirstAttempt(false)
     try {
       await api.post("/resend-verification", { email })
       setResendMsg("Лист надіслано! Перевірте вашу пошту.")
@@ -71,7 +73,7 @@ export default function Login(){
                 disabled={resendLoading}
                 style={{ width: "100%", background: "#6366f1" }}
               >
-                {resendLoading ? "Надсилання..." : "Надіслати лист повторно"}
+                {resendLoading ? "Надсилання..." : firstAttempt ? "Надіслати" : "Надіслати лист повторно"}
               </button>
               {resendMsg && <p style={{ fontSize: 13, marginTop: 6, color: "#64748b" }}>{resendMsg}</p>}
             </div>
