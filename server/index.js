@@ -10,6 +10,7 @@ import dotenv from "dotenv"
 import bcrypt from "bcryptjs"
 import crypto from "crypto"
 import nodemailer from "nodemailer"
+import rateLimit from "express-rate-limit"
 
 import User from "./models/User.js"
 import Habit from "./models/Habit.js"
@@ -25,6 +26,23 @@ dotenv.config({ path: path.join(__dirname, "../.env") })
 
 const app = express()
 
+// ✅ Auth rate limiters
+const authRateLimit = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 хвилин
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: "Забагато запитів. Спробуйте через 15 хвилин."
+})
+
+const verifyEmailRateLimit = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: "Забагато запитів. Спробуйте через 15 хвилин."
+})
+
 // ✅ Email transporter
 const emailTransporter = nodemailer.createTransport({
   host: process.env.EMAIL_HOST || "smtp.gmail.com",
@@ -34,6 +52,13 @@ const emailTransporter = nodemailer.createTransport({
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS
   }
+})
+
+const VERIFICATION_TOKEN_EXPIRY_MS = 24 * 60 * 60 * 1000 // 24 години
+
+const generateVerificationToken = () => ({
+  token: crypto.randomBytes(32).toString("hex"),
+  expires: new Date(Date.now() + VERIFICATION_TOKEN_EXPIRY_MS)
 })
 
 const sendVerificationEmail = async (to, token) => {
@@ -293,7 +318,7 @@ mongoose.connect(process.env.MONGO_URI, {
 // Socket / chat removed (chat replaced by complaint flow)
 
 // ✅ AUTH
-app.post("/api/register", async(req,res)=>{
+app.post("/api/register", authRateLimit, async(req,res)=>{
   try {
     const { email, password, username } = req.body
     const normalizedEmail = normalizeEmail(email)
@@ -307,8 +332,7 @@ app.post("/api/register", async(req,res)=>{
       return res.status(400).json("Пароль повинен містити мінімум 6 символів")
     }
 
-    const verificationToken = crypto.randomBytes(32).toString("hex")
-    const verificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 годин
+    const { token: verificationToken, expires: verificationExpires } = generateVerificationToken()
 
     const hashedPassword = await bcrypt.hash(password, 10)
     const user = await User.create({
@@ -324,9 +348,8 @@ app.post("/api/register", async(req,res)=>{
       await sendVerificationEmail(normalizedEmail, verificationToken)
     } catch (emailErr) {
       console.error("Помилка надсилання email підтвердження:", emailErr)
-      // Видаляємо користувача, якщо email не вдалося надіслати
-      await User.findByIdAndDelete(user._id)
-      return res.status(500).json("Не вдалося надіслати email підтвердження. Перевірте правильність адреси та спробуйте знову.")
+      // Акаунт збережено, але лист не надіслано — користувач зможе запросити повторне надсилання
+      return res.status(500).json("Акаунт створено, але не вдалося надіслати лист підтвердження. Скористайтесь повторним надсиланням на сторінці входу.")
     }
 
     res.json({
@@ -351,7 +374,7 @@ app.post("/api/register", async(req,res)=>{
   }
 })
 
-app.post("/api/login", async(req,res)=>{
+app.post("/api/login", authRateLimit, async(req,res)=>{
   try {
     const { email, password } = req.body
     const normalizedEmail = normalizeEmail(email)
@@ -368,7 +391,7 @@ app.post("/api/login", async(req,res)=>{
     }
 
     if (!user.isVerified) {
-      return res.status(403).json("Будь ласка, підтвердіть вашу електронну пошту перед входом")
+      return res.status(403).json({ code: "EMAIL_NOT_VERIFIED", message: "Будь ласка, підтвердіть вашу електронну пошту перед входом" })
     }
 
     const match = await bcrypt.compare(password, user.password)
@@ -396,7 +419,7 @@ app.post("/api/login", async(req,res)=>{
 })
 
 // ✅ EMAIL VERIFICATION
-app.get("/api/verify-email/:token", async(req,res)=>{
+app.get("/api/verify-email/:token", verifyEmailRateLimit, async(req,res)=>{
   try {
     const { token } = req.params
 
@@ -425,7 +448,7 @@ app.get("/api/verify-email/:token", async(req,res)=>{
   }
 })
 
-app.post("/api/resend-verification", async(req,res)=>{
+app.post("/api/resend-verification", authRateLimit, async(req,res)=>{
   try {
     const { email } = req.body
     const normalizedEmail = normalizeEmail(email)
@@ -444,9 +467,9 @@ app.post("/api/resend-verification", async(req,res)=>{
       return res.status(400).json("Цей акаунт вже підтверджено")
     }
 
-    const verificationToken = crypto.randomBytes(32).toString("hex")
+    const { token: verificationToken, expires: verificationExpires } = generateVerificationToken()
     user.emailVerificationToken = verificationToken
-    user.emailVerificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000)
+    user.emailVerificationExpires = verificationExpires
     await user.save()
 
     await sendVerificationEmail(normalizedEmail, verificationToken)

@@ -28,9 +28,10 @@ export default function Login(){
       localStorage.token = res.data.token
       navigate("/")
     } catch(e) {
-      const msg = e.response?.data || "Помилка входу"
+      const data = e.response?.data
+      const msg = (data && typeof data === "object" ? data.message : data) || "Помилка входу"
       setError(msg)
-      if (e.response?.status === 403 && typeof msg === "string" && msg.includes("підтвердіть")) {
+      if (e.response?.status === 403 && data?.code === "EMAIL_NOT_VERIFIED") {
         setNotVerified(true)
       }
     }
