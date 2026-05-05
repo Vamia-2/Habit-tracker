@@ -2,10 +2,6 @@ import express from "express"
 import mongoose from "mongoose"
 import cors from "cors"
 import jwt from "jsonwebtoken"
-import http from "http"
-import https from "https"
-import fs from "fs"
-import net from "net"
 import path from "path"
 import { fileURLToPath } from "url"
 import dotenv from "dotenv"
@@ -13,7 +9,6 @@ import bcrypt from "bcryptjs"
 import crypto from "crypto"
 import nodemailer from "nodemailer"
 import rateLimit from "express-rate-limit"
-import selfsigned from 'selfsigned'
 
 import User from "./models/User.js"
 import Habit from "./models/Habit.js"
@@ -145,19 +140,9 @@ const setTimeOnDate = (sourceDate, dueTime) => {
 const allowedOrigins = [
   process.env.FRONTEND_URL,
   "http://localhost:5173",
-  "http://localhost:5174",
+  "http://localhost:3000",
   "http://127.0.0.1:5173",
-  "http://127.0.0.1:5174",
-  "http://localhost:5000",
-  "http://127.0.0.1:5000",
-  "https://localhost:5173",
-  "https://localhost:5174",
-  "https://127.0.0.1:5173",
-  "https://127.0.0.1:5174",
-  "https://localhost:5176",
-  "https://127.0.0.1:5176",
-  "https://localhost:5000",
-  "https://127.0.0.1:5000"
+  "http://127.0.0.1:3000"
 ].filter(Boolean)
 
 const isLocalDevOrigin = (origin) => {
@@ -1069,39 +1054,6 @@ const startServer = async () => {
   if (!portAvailable) {
     console.log(`ℹ️ Port ${PORT} is already in use. Another server instance is probably running.`)
     process.exit(0)
-  }
-
-  const useHttps = process.env.USE_HTTPS === 'true' || process.env.HTTPS === 'true'
-
-  if (useHttps) {
-    try {
-      const certPath = path.join(__dirname, "../localhost-cert.pem")
-      const keyPath = path.join(__dirname, "../localhost-key.pem")
-      const httpsOptions = fs.existsSync(certPath) && fs.existsSync(keyPath)
-        ? {
-            key: fs.readFileSync(keyPath),
-            cert: fs.readFileSync(certPath)
-          }
-        : (() => {
-            const attrs = selfsigned.generate([{ name: 'commonName', value: 'localhost' }], { days: 365, keySize: 2048, altNames: ['localhost', '127.0.0.1'] })
-            return { key: attrs.private, cert: attrs.cert }
-          })()
-
-      const server = https.createServer(httpsOptions, app)
-      server.listen(PORT, () => console.log(`SERVER RUNNING (HTTPS) on port ${PORT}`))
-
-      server.on('error', (error) => {
-        if (error?.code === 'EADDRINUSE') {
-          console.log(`ℹ️ Port ${PORT} is already in use. Exiting cleanly.`)
-          process.exit(0)
-          return
-        }
-        console.error('❌ Server error while starting (HTTPS):', error)
-      })
-      return
-    } catch (e) {
-      console.error('❌ Failed to start HTTPS server, falling back to HTTP:', e)
-    }
   }
 
   const listener = app.listen(PORT, () => console.log(`SERVER RUNNING on port ${PORT}`))
