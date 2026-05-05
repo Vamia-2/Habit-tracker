@@ -472,7 +472,12 @@ app.post("/api/resend-verification", authRateLimit, async(req,res)=>{
     user.emailVerificationExpires = verificationExpires
     await user.save()
 
-    await sendVerificationEmail(normalizedEmail, verificationToken)
+    try {
+      await sendVerificationEmail(normalizedEmail, verificationToken)
+    } catch (emailErr) {
+      console.error("Помилка повторного надсилання email підтвердження:", emailErr)
+      return res.status(500).json("Не вдалося надіслати лист підтвердження. Спробуйте пізніше.")
+    }
 
     res.json({ message: "Лист підтвердження надіслано повторно. Перевірте вашу пошту." })
   } catch(e) {
