@@ -8,6 +8,9 @@ export default function Login(){
   const [password, setPassword] = useState("")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
+  const [notVerified, setNotVerified] = useState(false)
+  const [resendLoading, setResendLoading] = useState(false)
+  const [resendMsg, setResendMsg] = useState("")
   const navigate = useNavigate()
   const { theme, toggleTheme } = useTheme()
 
@@ -18,14 +21,33 @@ export default function Login(){
     }
     
     setLoading(true)
+    setNotVerified(false)
+    setResendMsg("")
     try {
       const res = await api.post("/login", {email, password})
       localStorage.token = res.data.token
       navigate("/")
     } catch(e) {
-      setError(e.response?.data || "Помилка входу")
+      const data = e.response?.data
+      const msg = (data && typeof data === "object" ? data.message : data) || "Помилка входу"
+      setError(msg)
+      if (e.response?.status === 403 && data?.code === "EMAIL_NOT_VERIFIED") {
+        setNotVerified(true)
+      }
     }
     setLoading(false)
+  }
+
+  const resendVerification = async () => {
+    setResendLoading(true)
+    setResendMsg("")
+    try {
+      await api.post("/resend-verification", { email })
+      setResendMsg("Лист надіслано! Перевірте вашу пошту.")
+    } catch(e) {
+      setResendMsg(e.response?.data || "Помилка надсилання листа")
+    }
+    setResendLoading(false)
   }
 
   return (
@@ -40,6 +62,20 @@ export default function Login(){
           <h2>Вхід</h2>
           
           {error && <div className="error-message">{error}</div>}
+
+          {notVerified && (
+            <div style={{ marginTop: 8, marginBottom: 8 }}>
+              <button
+                className="btn-primary"
+                onClick={resendVerification}
+                disabled={resendLoading}
+                style={{ width: "100%", background: "#6366f1" }}
+              >
+                {resendLoading ? "Надсилання..." : "Надіслати лист повторно"}
+              </button>
+              {resendMsg && <p style={{ fontSize: 13, marginTop: 6, color: "#64748b" }}>{resendMsg}</p>}
+            </div>
+          )}
           
           <div className="form-group">
             <label>Email</label>

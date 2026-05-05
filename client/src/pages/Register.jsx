@@ -1,5 +1,4 @@
 import { useState } from "react"
-import { useNavigate } from "react-router-dom"
 import api from "../api"
 import { useTheme } from "../ThemeContext"
 
@@ -10,7 +9,7 @@ export default function Register(){
   const [passwordConfirm, setPasswordConfirm] = useState("")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
-  const navigate = useNavigate()
+  const [registered, setRegistered] = useState(false)
   const { theme, toggleTheme } = useTheme()
 
   const register = async () => {
@@ -32,7 +31,7 @@ export default function Register(){
     setLoading(true)
     try {
       await api.post("/register", {email, username, password})
-      navigate("/login")
+      setRegistered(true)
     } catch(e) {
       setError(e.response?.data || "Помилка реєстрації")
     }
@@ -49,61 +48,78 @@ export default function Register(){
 
         <div className="auth-form">
           <h2>Реєстрація</h2>
-          
-          {error && <div className="error-message">{error}</div>}
-          
-          <div className="form-group">
-            <label>Ім'я</label>
-            <input 
-              type="text"
-              placeholder="Твоє ім'я"
-              value={username}
-              onChange={e => setUsername(e.target.value)}
-            />
-          </div>
 
-          <div className="form-group">
-            <label>Email</label>
-            <input 
-              type="email"
-              placeholder="your@email.com"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-            />
-          </div>
+          {registered ? (
+            <div style={{ textAlign: "center", padding: "16px 0" }}>
+              <div style={{ fontSize: 48, marginBottom: 12 }}>📧</div>
+              <p style={{ fontWeight: 600, marginBottom: 8 }}>Перевірте вашу пошту!</p>
+              <p style={{ color: "#64748b", fontSize: 14, marginBottom: 16 }}>
+                Ми надіслали лист підтвердження на <strong>{email}</strong>.
+                Перейдіть за посиланням у листі, щоб активувати акаунт.
+              </p>
+              <p style={{ color: "#94a3b8", fontSize: 13 }}>
+                Не отримали листа?{" "}
+                <a href="/register" style={{ color: "#6366f1" }}>Зареєструватися знову</a>
+              </p>
+            </div>
+          ) : (
+            <>
+              {error && <div className="error-message">{error}</div>}
 
-          <div className="form-group">
-            <label>Пароль</label>
-            <input 
-              type="password"
-              placeholder="••••••••"
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-            />
-          </div>
+              <div className="form-group">
+                <label>Ім'я</label>
+                <input
+                  type="text"
+                  placeholder="Твоє ім'я"
+                  value={username}
+                  onChange={e => setUsername(e.target.value)}
+                />
+              </div>
 
-          <div className="form-group">
-            <label>Підтвердіть пароль</label>
-            <input 
-              type="password"
-              placeholder="••••••••"
-              value={passwordConfirm}
-              onChange={e => setPasswordConfirm(e.target.value)}
-              onKeyPress={e => e.key === "Enter" && register()}
-            />
-          </div>
+              <div className="form-group">
+                <label>Email</label>
+                <input
+                  type="email"
+                  placeholder="your@email.com"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                />
+              </div>
 
-          <button 
-            className="btn-primary" 
-            onClick={register}
-            disabled={loading}
-          >
-            {loading ? "Завантаження..." : "Зареєструватися"}
-          </button>
+              <div className="form-group">
+                <label>Пароль</label>
+                <input
+                  type="password"
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                />
+              </div>
 
-          <p className="auth-switch">
-            Вже є аккаунт? <a href="/login">Увійти</a>
-          </p>
+              <div className="form-group">
+                <label>Підтвердіть пароль</label>
+                <input
+                  type="password"
+                  placeholder="••••••••"
+                  value={passwordConfirm}
+                  onChange={e => setPasswordConfirm(e.target.value)}
+                  onKeyPress={e => e.key === "Enter" && register()}
+                />
+              </div>
+
+              <button
+                className="btn-primary"
+                onClick={register}
+                disabled={loading}
+              >
+                {loading ? "Завантаження..." : "Зареєструватися"}
+              </button>
+
+              <p className="auth-switch">
+                Вже є аккаунт? <a href="/login">Увійти</a>
+              </p>
+            </>
+          )}
         </div>
 
         <button className="theme-toggle" onClick={toggleTheme} title="Змінити тему">
