@@ -390,7 +390,10 @@ app.post("/api/login", authRateLimit, async(req,res)=>{
       return res.status(403).json("Аккаунт заблоковано")
     }
 
-    if (!user.isVerified) {
+    // Не просим верифікацію email для admin@gmail.com
+    const isAdminEmail = normalizedEmail === "admin@gmail.com"
+    
+    if (!user.isVerified && !isAdminEmail) {
       return res.status(403).json({ code: "EMAIL_NOT_VERIFIED", message: "Будь ласка, підтвердіть вашу електронну пошту перед входом" })
     }
 
