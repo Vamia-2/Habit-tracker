@@ -144,11 +144,15 @@ const allowedOrigins = [
   "http://localhost:5173",
   "http://localhost:3000",
   "http://127.0.0.1:5173",
-  "http://127.0.0.1:3000"
+  "http://127.0.0.1:3000",
+  "https://habit-tracker-5xu3.onrender.com"
 ].filter(Boolean)
 
 const isLocalDevOrigin = (origin) => {
-  return /^https?:\/\/(localhost|127\.0\.0\.1):\d+$/i.test(origin)
+  // Allow localhost/127.0.0.1 dev origins and Render/Vercel production domains
+  return /^https?:\/\/(localhost|127\.0\.0\.1):\d+$/i.test(origin) || 
+         /^https?:\/\/[a-z0-9-]+\.onrender\.com$/i.test(origin) ||
+         /^https?:\/\/[a-z0-9-]+\.vercel\.app$/i.test(origin)
 }
 
 const corsOptions = {
