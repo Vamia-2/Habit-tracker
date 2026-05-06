@@ -672,7 +672,7 @@ export default function Dashboard({ initialSection = "habits" }){
               <h3>💡 Пропозиція</h3>
               <button className="modal-close" onClick={closeSuggestionDialog} disabled={sendingSuggestion}>×</button>
             </div>
-            <p className="suggestion-modal-text">Які ваші ідеї для покращення? Чого не вистачає? Що заважає користуватися додатком? Повідомлення побачить адміністратор окремо.</p>
+            <p className="suggestion-modal-text">Які ваші ідеї для покращення? Чого не вистачає? Що заважає користуватися додатком? Допоможіть зробити його кращим!</p>
             <textarea
               className="suggestion-textarea"
               rows="6"

@@ -176,7 +176,6 @@ export default function Complaint(){
                         <p className="user-button-email">{u.email}</p>
                       </div>
                     </button>
-                    {/* report button removed per request */}
                   </div>
                 ))
               )}
