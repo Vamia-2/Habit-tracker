@@ -1,148 +1,149 @@
-// Debug logging that works via postMessage to clients
-const debugLog = (msg) => {
-  console.log(msg)
-  // Also try to notify main thread via postMessage
-  self.clients.matchAll({ includeUncontrolled: true }).then(clients => {
-    clients.forEach(client => {
-      try {
-        client.postMessage({ type: 'sw_log', msg })
-      } catch (e) {
-        // Client might be closed, continue
-      }
-    })
-  }).catch(e => console.error("Error notifying clients:", e))
-}
+// Service Worker for push notifications - Simplified & Reliable
 
-// Try to store logs in localStorage as fallback
-const storeLog = (msg) => {
-  try {
-    const logs = JSON.parse(localStorage.getItem('sw_logs') || '[]')
-    logs.push(`[${new Date().toLocaleTimeString()}] ${msg}`)
-    if (logs.length > 50) logs.shift()
-    localStorage.setItem('sw_logs', JSON.stringify(logs))
-  } catch (e) {
-    // Fail silently - localStorage may not be available in SW context
-  }
-}
-
-// Log all errors
-self.addEventListener('error', (event) => {
-  const msg = `❌ [SW] Error: ${event.message || event.error}`
-  debugLog(msg)
-  storeLog(msg)
-})
-
-self.addEventListener('unhandledrejection', (event) => {
-  const msg = `❌ [SW] Unhandled rejection: ${event.reason}`
-  debugLog(msg)
-  storeLog(msg)
-})
-
-// Listen for control messages from main thread
-self.addEventListener('message', (event) => {
-  if (event.data && event.data.type === 'ping') {
-    debugLog(`📬 [SW] Received ping from main thread`)
-  }
-})
+const log = (msg) => console.log(msg)
 
 const isMobileDevice = () => {
-  const userAgent = self.navigator?.userAgent || ''
-  return /Android|iPhone|iPad|iPod|Mobi/i.test(userAgent)
+  const ua = self.navigator?.userAgent || ''
+  return /Android|iPhone|iPad|iPod|Mobi/i.test(ua)
 }
 
-// MAIN: Handle push notifications
-self.addEventListener("push", function(event) {
-  const msg1 = "🔔 [SW] Push event received!"
-  debugLog(msg1)
-  storeLog(msg1)
-  
-  const msg2 = `Event data: ${event.data ? 'present' : 'null'}`
-  debugLog(msg2)
-  storeLog(msg2)
-  
-  let data = { title: "Habit Tracker", body: "Нове нагадування", url: "/" }
+// ============================================================
+// INSTALL - Set up immediately
+// ============================================================
+self.addEventListener('install', (event) => {
+  log('[SW] Installing Service Worker')
+  self.skipWaiting()
+})
 
+// ============================================================
+// ACTIVATE - Take control immediately
+// ============================================================
+self.addEventListener('activate', (event) => {
+  log('[SW] Activating Service Worker')
+  event.waitUntil(clients.claim())
+})
+
+// ============================================================
+// PUSH - Handle notifications
+// ============================================================
+self.addEventListener('push', (event) => {
+  log('🔔 [SW] PUSH EVENT RECEIVED!')
+  
+  let data = {
+    title: '🔔 Habit Tracker',
+    body: 'Нове нагадування',
+    url: '/'
+  }
+
+  // Try to parse JSON from push
   if (event.data) {
     try {
       data = event.data.json()
-      const msg3 = `Parsed JSON: ${JSON.stringify(data).substring(0, 100)}`
-      debugLog(msg3)
-      storeLog(msg3)
+      log(`[SW] Parsed push data: ${JSON.stringify(data).substring(0, 150)}`)
     } catch (e) {
-      const msg3 = `Parse error: ${e.message}`
-      debugLog(msg3)
-      storeLog(msg3)
       try {
         const text = event.data.text()
-        data = { title: "Habit Tracker", body: text || "Нове нагадування", url: "/" }
+        data.body = text
       } catch (e2) {
-        data = { title: "Habit Tracker", body: "Нове нагадування", url: "/" }
+        log(`[SW] Could not parse push data`)
       }
     }
   }
 
-  const onMobile = isMobileDevice()
-  const formattedBody = typeof data.body === "string" ? data.body.replace(/\n+/g, "\n") : "Нове нагадування"
+  const isMobile = isMobileDevice()
   const options = {
-    body: formattedBody,
-    icon: "/assets/icon-192.png",
-    badge: "/assets/badge-72.png",
-    vibrate: onMobile ? [200, 100, 200] : undefined,
+    body: data.body || 'Нове нагадування',
+    icon: '/assets/icon-192.png',
+    badge: '/assets/badge-72.png',
     tag: 'habit-reminder',
     renotify: true,
-    // Show notification and keep it on screen until user interacts (click/close)
     requireInteraction: true,
     silent: false,
-    data: { url: data.url },
+    vibrate: isMobile ? [300, 100, 300] : undefined,
+    data: { url: data.url || '/' },
     actions: [
-      { action: "open", title: "✅ Виконано" },
-      { action: "snooze", title: "⏰ Позже" }
+      { action: 'complete', title: '✅ Виконано' },
+      { action: 'dismiss', title: '✕ Закрити' }
     ]
   }
 
-  const msg4 = `Showing notification: "${data.title}"`
-  debugLog(msg4)
-  storeLog(msg4)
+  log(`[SW] Showing notification: "${data.title}"`)
   
   event.waitUntil(
-    self.registration.showNotification(data.title, options)
+    self.registration
+      .showNotification(data.title || '🔔 Habit Tracker', options)
       .then(() => {
-        const msg5 = "✅ [SW] Notification shown successfully!"
-        debugLog(msg5)
-        storeLog(msg5)
+        log('✅ [SW] Notification shown!')
       })
-      .catch(e => {
-        const msg5 = `❌ [SW] Failed to show notification: ${e.message}`
-        debugLog(msg5)
-        storeLog(msg5)
+      .catch((err) => {
+        log(`❌ [SW] Notification error: ${err.message}`)
+        // Fallback: try without actions
+        return self.registration.showNotification('🔔 Habit Tracker', {
+          body: data.body || 'Нове нагадування',
+          tag: 'habit-reminder',
+          requireInteraction: true
+        })
       })
   )
 })
 
-self.addEventListener('notificationclick', function(event) {
+// ============================================================
+// NOTIFICATION CLICK - Handle user interaction
+// ============================================================
+self.addEventListener('notificationclick', (event) => {
+  log(`[SW] Notification clicked: ${event.action}`)
   event.notification.close()
-  
-  // Handle different action clicks
-  if (event.action === 'snooze') {
-    // Snooze for 5 minutes - just close the notification
-    debugLog('⏰ [SW] Snoozed for 5 minutes')
+
+  const url = event.notification.data?.url || '/'
+
+  if (event.action === 'dismiss') {
     return
   }
-  
-  // Default: open the app
-  const url = event.notification.data?.url || '/'
+
   event.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(windowClients => {
-      for (let client of windowClients) {
-        if (client.url === url && 'focus' in client) {
-          return client.focus()
+    clients
+      .matchAll({ type: 'window', includeUncontrolled: true })
+      .then((windowClients) => {
+        for (let client of windowClients) {
+          if (client.url === url || client.url.includes('habit-tracker')) {
+            return client.focus()
+          }
         }
-      }
-      if (clients.openWindow) return clients.openWindow(url)
-    })
+        return clients.openWindow ? clients.openWindow(url) : null
+      })
   )
 })
 
-self.addEventListener('pushsubscriptionchange', function(event) {
-  // Optionally handle subscription refresh here
+// ============================================================
+// NOTIFICATION CLOSE
+// ============================================================
+self.addEventListener('notificationclose', (event) => {
+  log('[SW] Notification closed by user')
 })
+
+// ============================================================
+// MESSAGE - Communication with main thread
+// ============================================================
+self.addEventListener('message', (event) => {
+  log(`[SW] Message: ${event.data?.type}`)
+  if (event.data?.type === 'ping') {
+    event.ports[0]?.postMessage({ type: 'pong' })
+  }
+})
+
+// ============================================================
+// ERROR HANDLERS
+// ============================================================
+self.addEventListener('error', (event) => {
+  log(`❌ [SW] Error: ${event.message}`)
+})
+
+self.addEventListener('unhandledrejection', (event) => {
+  log(`❌ [SW] Unhandled: ${event.reason}`)
+})
+
+self.addEventListener('pushsubscriptionchange', (event) => {
+  log('[SW] Subscription changed')
+})
+
+log('✅ [SW] Service Worker loaded')
