@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react"
 import { BrowserRouter,Routes,Route } from "react-router-dom"
 
 import Login from "./pages/Login.jsx"
@@ -12,9 +13,53 @@ import Cycles from "./pages/Cycles.jsx"
 import ToastHost from "./components/ToastHost.jsx"
 
 export default function App(){
+  const [pushOverlay, setPushOverlay] = useState(null)
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !navigator?.serviceWorker) return
+
+    const onMessage = (event) => {
+      if (event?.data?.type !== "sw_push") return
+
+      const payload = event.data.payload || {}
+      setPushOverlay({
+        title: payload.title || "🔔 Нагадування",
+        body: payload.body || "Нове нагадування",
+        url: payload.url || "/"
+      })
+    }
+
+    navigator.serviceWorker.addEventListener("message", onMessage)
+    return () => navigator.serviceWorker.removeEventListener("message", onMessage)
+  }, [])
+
+  const closeOverlay = () => setPushOverlay(null)
+
   return(
     <BrowserRouter>
       <ToastHost/>
+      {pushOverlay && (
+        <div className="push-overlay" role="alertdialog" aria-live="assertive" aria-label="Нагадування">
+          <div className="push-overlay-card">
+            <h2>{pushOverlay.title}</h2>
+            <p>{pushOverlay.body}</p>
+            <div className="push-overlay-actions">
+              <button
+                className="btn-primary"
+                onClick={() => {
+                  window.location.href = pushOverlay.url || "/"
+                  closeOverlay()
+                }}
+              >
+                Відкрити
+              </button>
+              <button className="btn-secondary" onClick={closeOverlay}>
+                Закрити
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <Routes>
         <Route path="/" element={<Dashboard/>}/>
         <Route path="/login" element={<Login/>}/>

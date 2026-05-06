@@ -1,17 +1,21 @@
 // Service Worker for push notifications - Simplified & Reliable
 
-const log = (msg) => {
-  console.log(msg)
+const postToClients = (payload) => {
   self.clients
     .matchAll({ includeUncontrolled: true, type: "window" })
     .then((clientsList) => {
       for (const client of clientsList) {
-        client.postMessage({ type: "sw_log", msg })
+        client.postMessage(payload)
       }
     })
     .catch(() => {
-      // Ignore logging transport errors; console logging is enough.
+      // Ignore transport errors.
     })
+}
+
+const log = (msg) => {
+  console.log(msg)
+  postToClients({ type: "sw_log", msg })
 }
 
 const isMobileDevice = () => {
@@ -61,6 +65,16 @@ self.addEventListener('push', (event) => {
       }
     }
   }
+
+  // In-app fallback: broadcast push payload so the page can render a full-screen reminder.
+  postToClients({
+    type: "sw_push",
+    payload: {
+      title: data.title || "🔔 Habit Tracker",
+      body: data.body || "Нове нагадування",
+      url: data.url || "/"
+    }
+  })
 
   const isMobile = isMobileDevice()
   const options = {
