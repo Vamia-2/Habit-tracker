@@ -114,7 +114,7 @@ const toLocalDayKey = (date) => {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`
 }
 
-const parseDueAt = (dateValue, dueTime) => {
+const parseDueAt = (dateValue, dueTime, timezoneOffset = 0) => {
   const date = new Date(dateValue)
   if (Number.isNaN(date.getTime())) return null
 
@@ -123,19 +123,22 @@ const parseDueAt = (dateValue, dueTime) => {
 
   if (!hasExplicitTimeInDateString && typeof dueTime === "string" && /^\d{2}:\d{2}$/.test(dueTime)) {
     const [hours, minutes] = dueTime.split(":").map(Number)
-    date.setHours(hours, minutes, 0, 0)
+    // Встановлюємо UTC hours, потім коригуємо на основі timezone offset
+    date.setUTCHours(hours, minutes, 0, 0)
+    date.setMinutes(date.getMinutes() - timezoneOffset)
   }
 
   return date
 }
 
-const setTimeOnDate = (sourceDate, dueTime) => {
+const setTimeOnDate = (sourceDate, dueTime, timezoneOffset = 0) => {
   const date = new Date(sourceDate)
   const [hours, minutes] = typeof dueTime === "string" && /^\d{2}:\d{2}$/.test(dueTime)
     ? dueTime.split(":").map(Number)
     : [9, 0]
 
-  date.setHours(hours, minutes, 0, 0)
+  date.setUTCHours(hours, minutes, 0, 0)
+  date.setMinutes(date.getMinutes() - timezoneOffset)
   return date
 }
 
@@ -267,7 +270,7 @@ mongoose.connect(process.env.MONGO_URI, {
 
               const cycleDays = normalizeCycleDays(habit.cycleDays)
               const isRecurring = cycleDays.length > 0
-              const dueAt = parseDueAt(habit.date, habit.dueTime)
+              const dueAt = parseDueAt(habit.date, habit.dueTime, habit.timezoneOffset || 0)
               console.log(`  📌 Type: ${isRecurring ? "recurring" : "one-time"}, dueTime: "${habit.dueTime}", date: ${habit.date}`)
               
               if (!dueAt) {
@@ -304,7 +307,7 @@ mongoose.connect(process.env.MONGO_URI, {
                   continue
                 }
 
-                const recurringDueAt = setTimeOnDate(today, habit.dueTime)
+                const recurringDueAt = setTimeOnDate(today, habit.dueTime, habit.timezoneOffset || 0)
                 console.log(`  ⏰ Recurring due at: ${recurringDueAt.toISOString()}, now: ${now.toISOString()}`)
                 if (today < recurringDueAt) {
                   console.log(`  ⊘ Skipped: Not yet due (${today.getHours()}:${String(today.getMinutes()).padStart(2, "0")} < ${recurringDueAt.getHours()}:${String(recurringDueAt.getMinutes()).padStart(2, "0")})`)
@@ -644,7 +647,7 @@ const ensureNotBlocked = (req, res, next) => {
 }
 
 app.post("/api/habits", auth, ensureNotBlocked, async(req,res)=>{
-  const allowedFields = pick(req.body, ["title", "date", "dueTime", "reminder", "public", "notes", "commentsEnabled", "cycleDays"])
+  const allowedFields = pick(req.body, ["title", "date", "dueTime", "reminder", "public", "notes", "commentsEnabled", "cycleDays", "timezoneOffset"])
   if (!allowedFields.title || !allowedFields.date || !allowedFields.dueTime) {
     return res.status(400).json("Потрібні title, date і dueTime")
   }
@@ -676,6 +679,7 @@ app.put("/api/habits/:id", auth, ensureNotBlocked, async(req,res)=>{
     "title",
     "date",
     "dueTime",
+    "timezoneOffset",
     "reminder",
     "cycleDays",
     "completed",

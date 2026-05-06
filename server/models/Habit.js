@@ -5,6 +5,7 @@ export default mongoose.model("Habit", new mongoose.Schema({
   user: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
   date: Date,
   dueTime: String,
+  timezoneOffset: { type: Number, default: 0 },
   cycleDays: [{ type: Number }],
   reminder: { type: Boolean, default: false },
   reminderSentAt: Date,

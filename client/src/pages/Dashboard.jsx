@@ -248,6 +248,7 @@ export default function Dashboard({ initialSection = "habits" }){
         date: new Date(`${date}T${time}`),
         reminder,
         dueTime: time,
+        timezoneOffset: new Date().getTimezoneOffset(),
         cycleDays: activeSection === "cycles" ? cycleDays : []
       })
       setTitle("")
