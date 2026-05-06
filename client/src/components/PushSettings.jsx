@@ -347,38 +347,8 @@ export default function PushSettings({ onSubscribed }){
   }
 
   return(
-    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-      <button className="btn-secondary" onClick={subscribe} disabled={isWorking}>
-        {isWorking ? "⏳ Підключення..." : isSubscribed ? "✅ Увімкнено" : "🔔 Нагадування"}
-      </button>
-      <button
-        className="btn-secondary"
-        onClick={async () => {
-          if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) {
-            alert('Service Worker не підтримується в цьому браузері')
-            return
-          }
-          if (!confirm('Це видалить старі Service Worker і перереєструє свіжий. Продовжити?')) return
-
-          try {
-            const regs = await navigator.serviceWorker.getRegistrations()
-            for (let r of regs) {
-              try { await r.unregister() } catch (e) { console.warn('unregister failed', e) }
-            }
-            // Register fresh worker with cache-bust
-            const swUrl = `/sw.js?v=${Date.now()}`
-            const reg = await navigator.serviceWorker.register(swUrl, { updateViaCache: 'none' })
-            try { await reg.update() } catch(e){}
-            await waitForServiceWorkerActivation(reg)
-            alert('Service Worker перереєстровано успішно')
-          } catch (e) {
-            console.error('SW re-register failed', e)
-            alert('Не вдалося перереєструвати Service Worker')
-          }
-        }}
-      >
-        Очистити та перереєструвати SW
-      </button>
-    </div>
+    <button className="btn-secondary" onClick={subscribe} disabled={isWorking}>
+      {isWorking ? "⏳ Підключення..." : isSubscribed ? "✅ Увімкнено" : "🔔 Нагадування"}
+    </button>
   )
 }
