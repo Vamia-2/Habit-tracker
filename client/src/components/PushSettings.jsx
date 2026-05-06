@@ -57,6 +57,43 @@ const waitForServiceWorkerActivation = (registration, timeoutMs = 12000) => {
   )
 }
 
+const ensureSwMessageListener = () => {
+  if (typeof window === "undefined" || !navigator?.serviceWorker) return
+  if (window.swMessageListener) return
+
+  window.swMessageListener = true
+  navigator.serviceWorker.addEventListener("message", (event) => {
+    if (event.data?.type === "sw_log") {
+      console.log("📋 [From SW]", event.data.msg)
+    }
+  })
+}
+
+const pingServiceWorker = async (registration) => {
+  const active = registration?.active
+  if (!active) {
+    console.warn("⚠️ No active Service Worker for ping")
+    return false
+  }
+
+  return withTimeout(
+    new Promise((resolve) => {
+      const channel = new MessageChannel()
+      channel.port1.onmessage = (event) => {
+        const ok = event?.data?.type === "pong"
+        console.log(ok ? "✅ SW ping/pong works" : "⚠️ SW responded unexpectedly", event?.data)
+        resolve(ok)
+      }
+      active.postMessage({ type: "ping" }, [channel.port2])
+    }),
+    "SW ping timeout",
+    5000
+  ).catch((e) => {
+    console.warn("⚠️ SW ping failed:", e.message)
+    return false
+  })
+}
+
 const getFriendlyPushError = (error) => {
   const raw = String(error?.message || error || "")
   const message = raw.toLowerCase()
@@ -122,6 +159,7 @@ export const subscribeToPushNotifications = async () => {
     )
     console.log("🔔 Service Worker registered:", reg.scope)
     console.log("🔔 Service Worker state:", reg.active?.state || reg.installing?.state || "unknown")
+    ensureSwMessageListener()
 
     // Ensure service worker is active before calling PushManager.subscribe.
     console.log("🔔 Waiting for Service Worker ready...")
@@ -133,6 +171,20 @@ export const subscribeToPushNotifications = async () => {
     console.log("🔔 Service Worker ready")
     await waitForServiceWorkerActivation(readyReg)
     console.log("🔔 Service Worker active")
+    await pingServiceWorker(readyReg)
+
+    // Local SW notification smoke test to verify rendering path independently from push delivery.
+    try {
+      await readyReg.showNotification("🧪 SW локальний тест", {
+        body: "Якщо бачите це — Service Worker може показувати сповіщення.",
+        tag: "sw-local-test",
+        requireInteraction: true,
+        data: { url: "/" }
+      })
+      console.log("✅ Local SW notification shown")
+    } catch (e) {
+      console.error("❌ Local SW notification failed:", e.message)
+    }
 
     const requestSubscription = async () => {
       console.log("🔔 Requesting push subscription...")
@@ -241,14 +293,7 @@ export default function PushSettings({ onSubscribed }){
         reg.update().catch(e => console.error("Update check failed:", e))
         
         // Listen for messages from Service Worker
-        if (!window.swMessageListener) {
-          window.swMessageListener = true
-          navigator.serviceWorker.addEventListener('message', (event) => {
-            if (event.data?.type === 'sw_log') {
-              console.log("📋 [From SW]", event.data.msg)
-            }
-          })
-        }
+        ensureSwMessageListener()
         
         const sub = await reg.pushManager.getSubscription()
         setIsSubscribed(Boolean(sub))
