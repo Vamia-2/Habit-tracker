@@ -143,12 +143,13 @@ const setTimeOnDate = (sourceDate, dueTime, timezoneOffset = 0) => {
   return date
 }
 
-const buildReminderPayload = (habit, dueAt, dueTimeLabel, isRecurring) => {
+const buildReminderPayload = (habit, dueAt, isRecurring) => {
   const habitTitle = habit?.title?.trim() || "Без назви"
   const title = "🔔 Нагадування"
+  const timeLabel = habit?.dueTime || dueAt.toLocaleTimeString("uk-UA", { hour: "2-digit", minute: "2-digit" })
   const body = isRecurring
-    ? `${habitTitle}\nСьогодні о ${dueTimeLabel || "--:--"}`
-    : `${habitTitle}\nНа ${dueAt.toLocaleDateString("uk-UA")} о ${dueTimeLabel || dueAt.toLocaleTimeString("uk-UA", { hour: "2-digit", minute: "2-digit" })}`
+    ? `${habitTitle}\nСьогодні о ${timeLabel}`
+    : `${habitTitle}\nНа ${dueAt.toLocaleDateString("uk-UA")} о ${timeLabel}`
 
   return {
     title,
@@ -323,12 +324,7 @@ mongoose.connect(process.env.MONGO_URI, {
                   continue
                 }
 
-                const payload = buildReminderPayload(
-                  habit,
-                  recurringDueAt,
-                  recurringDueAt.toLocaleTimeString("uk-UA", { hour: "2-digit", minute: "2-digit" }),
-                  true
-                )
+                const payload = buildReminderPayload(habit, recurringDueAt, true)
 
                 try {
                   await sendPush(habit.user.pushSubscription, payload)
@@ -361,9 +357,7 @@ mongoose.connect(process.env.MONGO_URI, {
                 continue
               }
 
-              const dueTimeLabel = habit.dueTime || dueAt.toLocaleTimeString("uk-UA", { hour: "2-digit", minute: "2-digit" })
-
-              const payload = buildReminderPayload(habit, dueAt, dueTimeLabel, false)
+              const payload = buildReminderPayload(habit, dueAt, false)
 
               try {
                 await sendPush(habit.user.pushSubscription, payload)
