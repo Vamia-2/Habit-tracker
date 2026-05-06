@@ -27,3 +27,55 @@ Quick steps to troubleshoot:
 4. Enable push in the app and check Console for messages from the Service Worker or BroadcastChannel.
 
 If you still don't see notifications, keep the tab open and the in-app overlay will show when a reminder arrives.
+
+## Email Verification — Setup & Troubleshooting
+
+**Email verification** is required for new user registration.
+
+### Setup
+
+1. Set up Gmail App Password (recommended for Gmail):
+   - Go to [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords)
+   - Select App: "Mail" | Device: "Windows Computer"
+   - Copy the 16-character password
+
+2. Add to `.env`:
+   ```
+   EMAIL_HOST=smtp.gmail.com
+   EMAIL_PORT=587
+   EMAIL_SECURE=false
+   EMAIL_USER=your-email@gmail.com
+   EMAIL_PASS=your-app-password
+   EMAIL_FROM=noreply@habit-tracker.com
+   FRONTEND_URL=http://localhost:5173  # or https://your-deployed-url
+   ```
+
+3. Restart server for changes to take effect.
+
+### Testing Email Setup
+
+**Test endpoint** (development only):
+```bash
+curl -X POST http://localhost:5000/api/debug/send-test-email \
+  -H "Content-Type: application/json" \
+  -d '{"email":"test@example.com"}'
+```
+
+If test email succeeds but registration emails don't arrive, check:
+- Server logs for `[EMAIL]` messages after registration
+- Spam/Junk folder in your email
+- Email credentials in `.env` are correct (especially `EMAIL_PASS` with no extra spaces)
+
+### Troubleshooting Registration Emails
+
+1. **Check server logs** for `📧 [EMAIL]` or `❌ [EMAIL]` messages
+2. **Verify token generation**: Look for `✅ [REGISTER] User ... token:` in logs
+3. **Check email credentials**: Run test email endpoint above
+4. **Resend verification**: POST to `/api/resend-verification` with `{"email":"user@example.com"}`
+
+### User Login After Verification
+
+- Unverified users can register but must verify email before first login
+- After clicking the verification link, `isVerified` is set to `true` and user can log in
+- Verification link expires after **24 hours**
+

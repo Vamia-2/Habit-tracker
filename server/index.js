@@ -463,6 +463,11 @@ app.post("/api/login", authRateLimit, async(req,res)=>{
     const user = await User.findOne({email: normalizedEmail})
     if(!user) return res.status(404).json("Користувач не знайдений")
 
+    if (!user.isVerified) {
+      console.log(`❌ [LOGIN] User ${normalizedEmail} attempted to login but not verified`)
+      return res.status(403).json("Вашу електронну пошту не підтверджено. Перевірте вашу пошту та натисніть посилання для підтвердження.")
+    }
+
     if (user.isBlocked) {
       return res.status(403).json("Аккаунт заблоковано")
     }
@@ -567,6 +572,26 @@ app.post("/api/resend-verification", authRateLimit, async(req,res)=>{
   }
 })
 
+
+// ✅ DEBUG: Test email sending (development only)
+app.post("/api/debug/send-test-email", async(req, res) => {
+  const { email } = req.body
+  if (!email) return res.status(400).json("Email required")
+  
+  try {
+    console.log(`🧪 [DEBUG] Sending test email to: ${email}`)
+    await emailTransporter.sendMail({
+      from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
+      to: email,
+      subject: "Test Email from Habit Tracker",
+      html: `<p>This is a test email to verify SMTP configuration is working.</p><p>Email config: ${process.env.EMAIL_HOST}:${process.env.EMAIL_PORT}</p>`
+    })
+    res.json({ success: true, message: "Test email sent successfully" })
+  } catch (e) {
+    console.error(`❌ [DEBUG] Test email failed:`, e?.message)
+    res.status(500).json({ success: false, error: e?.message })
+  }
+})
 
 // ✅ USER PROFILE
 app.get("/api/user/:id", auth, async(req,res)=>{
