@@ -244,26 +244,50 @@ mongoose.connect(process.env.MONGO_URI, {
             const windowEnd = new Date(now.getTime() + checkIntervalMs)
             const oldestAllowedDueAt = new Date(now.getTime() - staleReminderToleranceMs)
 
+            console.log(`📋 [SCHEDULER] Checking for reminders at ${now.toISOString()}`)
+
             const habits = await Habit.find({
               reminder: true,
               deleted: false
             }).populate("user", "pushSubscription username email")
 
+            console.log(`📋 [SCHEDULER] Found ${habits.length} habits with reminders enabled`)
+
             for (const habit of habits) {
-              if (!habit.user?.pushSubscription) continue
-              if (!habit.date) continue
+              console.log(`📋 [SCHEDULER] Processing habit: "${habit.title}" (ID: ${habit._id})`)
+              
+              if (!habit.user?.pushSubscription) {
+                console.log(`  ⊘ Skipped: No push subscription for user ${habit.user?._id}`)
+                continue
+              }
+              if (!habit.date) {
+                console.log(`  ⊘ Skipped: No date set`)
+                continue
+              }
 
               const cycleDays = normalizeCycleDays(habit.cycleDays)
               const isRecurring = cycleDays.length > 0
               const dueAt = parseDueAt(habit.date, habit.dueTime)
-              if (!dueAt) continue
+              console.log(`  📌 Type: ${isRecurring ? "recurring" : "one-time"}, dueTime: "${habit.dueTime}", date: ${habit.date}`)
+              
+              if (!dueAt) {
+                console.log(`  ⊘ Skipped: Could not parse dueAt`)
+                continue
+              }
 
               if (isRecurring) {
                 const today = new Date()
-                if (!cycleDays.includes(today.getDay())) continue
+                const todayDay = today.getDay()
+                console.log(`  📅 Recurring - today is day ${todayDay}, cycleDays: [${cycleDays.join(", ")}]`)
+                
+                if (!cycleDays.includes(todayDay)) {
+                  console.log(`  ⊘ Skipped: Today (${todayDay}) not in cycleDays`)
+                  continue
+                }
 
                 const todayKey = toLocalDayKey(today)
                 const lastReminderKey = habit.reminderSentAt ? toLocalDayKey(new Date(habit.reminderSentAt)) : null
+                console.log(`  📅 Today key: ${todayKey}, last reminder: ${lastReminderKey}`)
                 
                 // Reset if completion is from past day
                 const completedTodayKey = habit.completedAt ? toLocalDayKey(new Date(habit.completedAt)) : null
@@ -271,13 +295,21 @@ mongoose.connect(process.env.MONGO_URI, {
                   habit.completed = false
                   habit.completedAt = null
                   await habit.save()
+                  console.log(`  🔄 Reset completion from previous day`)
                 }
 
                 // Skip if already reminded today or already completed today
-                if (lastReminderKey === todayKey || (habit.completed && completedTodayKey === todayKey)) continue
+                if (lastReminderKey === todayKey || (habit.completed && completedTodayKey === todayKey)) {
+                  console.log(`  ⊘ Skipped: Already reminded today or completed today`)
+                  continue
+                }
 
                 const recurringDueAt = setTimeOnDate(today, habit.dueTime)
-                if (today < recurringDueAt) continue
+                console.log(`  ⏰ Recurring due at: ${recurringDueAt.toISOString()}, now: ${now.toISOString()}`)
+                if (today < recurringDueAt) {
+                  console.log(`  ⊘ Skipped: Not yet due (${today.getHours()}:${String(today.getMinutes()).padStart(2, "0")} < ${recurringDueAt.getHours()}:${String(recurringDueAt.getMinutes()).padStart(2, "0")})`)
+                  continue
+                }
 
                 const payload = buildReminderPayload(
                   habit,
@@ -290,18 +322,30 @@ mongoose.connect(process.env.MONGO_URI, {
                   await sendPush(habit.user.pushSubscription, payload)
                   habit.reminderSentAt = new Date()
                   await habit.save()
-                  console.log(`⏰ Push reminder sent for recurring habit ${habit._id}`)
+                  console.log(`✅ [SCHEDULER] Push reminder sent for recurring habit "${habit.title}" (${habit._id})`)
                 } catch (e) {
-                  console.error("❌ Не вдалося відправити нагадування для циклічної звички:", habit._id, e)
+                  console.error(`❌ [SCHEDULER] Failed to send reminder for "${habit.title}":`, e.message)
                 }
 
                 continue
               }
 
-              if (habit.completed) continue
-              if (habit.reminderSentAt) continue
+              // One-time habit
+              console.log(`  📆 One-time - completed: ${habit.completed}, reminderSentAt: ${habit.reminderSentAt}`)
+              if (habit.completed) {
+                console.log(`  ⊘ Skipped: Already completed`)
+                continue
+              }
+              if (habit.reminderSentAt) {
+                console.log(`  ⊘ Skipped: Reminder already sent`)
+                continue
+              }
 
-              if (dueAt > windowEnd || dueAt < oldestAllowedDueAt) continue
+              console.log(`  ⏰ Due at: ${dueAt.toISOString()}, window: [${oldestAllowedDueAt.toISOString()} - ${windowEnd.toISOString()}]`)
+              if (dueAt > windowEnd || dueAt < oldestAllowedDueAt) {
+                console.log(`  ⊘ Skipped: Outside time window`)
+                continue
+              }
 
               const dueTimeLabel = habit.dueTime || dueAt.toLocaleTimeString("uk-UA", { hour: "2-digit", minute: "2-digit" })
 
@@ -311,13 +355,15 @@ mongoose.connect(process.env.MONGO_URI, {
                 await sendPush(habit.user.pushSubscription, payload)
                 habit.reminderSentAt = new Date()
                 await habit.save()
-                console.log(`⏰ Push reminder sent for habit ${habit._id}`)
+                console.log(`✅ [SCHEDULER] Push reminder sent for one-time habit "${habit.title}" (${habit._id})`)
               } catch (e) {
-                console.error("❌ Не вдалося відправити нагадування для звички:", habit._id, e)
+                console.error(`❌ [SCHEDULER] Failed to send reminder for "${habit.title}":`, e.message)
               }
             }
+            console.log(`📋 [SCHEDULER] Check complete at ${new Date().toISOString()}`)
           } catch (e) {
-            console.error("❌ Помилка планувальника нагадувань:", e)
+            console.error("❌ [SCHEDULER] Error in scheduler:", e.message)
+            console.error(e.stack)
           }
         }
 
