@@ -123,9 +123,10 @@ const parseDueAt = (dateValue, dueTime, timezoneOffset = 0) => {
 
   if (!hasExplicitTimeInDateString && typeof dueTime === "string" && /^\d{2}:\d{2}$/.test(dueTime)) {
     const [hours, minutes] = dueTime.split(":").map(Number)
-    // Встановлюємо UTC hours, потім коригуємо на основі timezone offset
+    // Set time as if it's in local timezone, then adjust to UTC
+    // offset is in minutes (negative for UTC+), so add it to get UTC
     date.setUTCHours(hours, minutes, 0, 0)
-    date.setMinutes(date.getMinutes() - timezoneOffset)
+    date.setMinutes(date.getMinutes() + timezoneOffset)
   }
 
   return date
@@ -138,7 +139,7 @@ const setTimeOnDate = (sourceDate, dueTime, timezoneOffset = 0) => {
     : [9, 0]
 
   date.setUTCHours(hours, minutes, 0, 0)
-  date.setMinutes(date.getMinutes() - timezoneOffset)
+  date.setMinutes(date.getMinutes() + timezoneOffset)
   return date
 }
 
@@ -271,7 +272,8 @@ mongoose.connect(process.env.MONGO_URI, {
               const cycleDays = normalizeCycleDays(habit.cycleDays)
               const isRecurring = cycleDays.length > 0
               const dueAt = parseDueAt(habit.date, habit.dueTime, habit.timezoneOffset || 0)
-              console.log(`  📌 Type: ${isRecurring ? "recurring" : "one-time"}, dueTime: "${habit.dueTime}", date: ${habit.date}`)
+              console.log(`  📌 Type: ${isRecurring ? "recurring" : "one-time"}, dueTime: "${habit.dueTime}", offset: ${habit.timezoneOffset}min`)
+              console.log(`     Parsed UTC: ${dueAt?.toISOString()}`)
               
               if (!dueAt) {
                 console.log(`  ⊘ Skipped: Could not parse dueAt`)
