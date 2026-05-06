@@ -349,18 +349,13 @@ app.post("/api/register", authRateLimit, async(req,res)=>{
       emailVerificationToken: verificationToken,
       emailVerificationExpires: verificationExpires
     })
-
-    try {
-      await sendVerificationEmail(normalizedEmail, verificationToken)
-    } catch (emailErr) {
-      console.error("Помилка надсилання email підтвердження:", emailErr)
-      // Акаунт збережено, але лист не надіслано — користувач зможе запросити повторне надсилання
-      return res.status(500).json("Акаунт створено, але не вдалося надіслати лист підтвердження. Скористайтесь повторним надсиланням на сторінці входу.")
-    }
-
     res.json({
       message: "Реєстрацію успішно завершено. Перевірте вашу електронну пошту для підтвердження акаунта.",
       email: user.email
+    })
+
+    void sendVerificationEmail(normalizedEmail, verificationToken).catch((emailErr) => {
+      console.error("Помилка надсилання email підтвердження:", emailErr)
     })
   } catch(e) {
     console.error("Registration error:", e)
