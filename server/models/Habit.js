@@ -6,6 +6,8 @@ export default mongoose.model("Habit", new mongoose.Schema({
   date: Date,
   dueTime: String,
   timezoneOffset: { type: Number, default: 0 },
+  // When set, reminders for this habit should be suppressed until this Date
+  snoozedUntil: Date,
   cycleDays: [{ type: Number }],
   reminder: { type: Boolean, default: false },
   reminderSentAt: Date,

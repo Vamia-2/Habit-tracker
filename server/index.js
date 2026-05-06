@@ -270,6 +270,12 @@ mongoose.connect(process.env.MONGO_URI, {
                 continue
               }
 
+              // Respect snooze: if snoozedUntil is set and still in the future, skip sending
+              if (habit.snoozedUntil && new Date() < new Date(habit.snoozedUntil)) {
+                console.log(`  ⊘ Skipped: Habit snoozed until ${new Date(habit.snoozedUntil).toISOString()}`)
+                continue
+              }
+
               const cycleDays = normalizeCycleDays(habit.cycleDays)
               const isRecurring = cycleDays.length > 0
               const dueAt = parseDueAt(habit.date, habit.dueTime, habit.timezoneOffset || 0)
@@ -327,6 +333,8 @@ mongoose.connect(process.env.MONGO_URI, {
                 try {
                   await sendPush(habit.user.pushSubscription, payload)
                   habit.reminderSentAt = new Date()
+                  // Clear snooze after successful send
+                  if (habit.snoozedUntil) habit.snoozedUntil = null
                   await habit.save()
                   console.log(`✅ [SCHEDULER] Push reminder sent for recurring habit "${habit.title}" (${habit._id})`)
                 } catch (e) {
@@ -360,6 +368,7 @@ mongoose.connect(process.env.MONGO_URI, {
               try {
                 await sendPush(habit.user.pushSubscription, payload)
                 habit.reminderSentAt = new Date()
+                if (habit.snoozedUntil) habit.snoozedUntil = null
                 await habit.save()
                 console.log(`✅ [SCHEDULER] Push reminder sent for one-time habit "${habit.title}" (${habit._id})`)
               } catch (e) {
@@ -731,10 +740,17 @@ app.post('/api/habits/:id/snooze', auth, ensureNotBlocked, async (req, res) => {
 
   const minutes = Number(req.body.minutes) || 10
   const newDate = new Date(Date.now() + minutes * 60000)
+  const cycleDays = normalizeCycleDays(habit.cycleDays)
+  const isRecurring = cycleDays.length > 0
 
-  // For one-time reminders, set date to newDate. For recurring, we store a temporary snoozeDate.
-  habit.date = newDate
-  // Ensure scheduler will attempt to send again
+  if (isRecurring) {
+    // For recurring habits, set snoozedUntil to postpone today's reminder
+    habit.snoozedUntil = newDate
+  } else {
+    // For one-time reminders, push the date forward
+    habit.date = newDate
+  }
+  // Ensure scheduler will attempt to send again after snooze
   habit.reminderSentAt = null
   await habit.save()
   res.json(habit)
