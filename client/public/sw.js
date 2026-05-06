@@ -88,15 +88,15 @@ self.addEventListener("push", function(event) {
     icon: "/assets/icon-192.png",
     badge: "/assets/badge-72.png",
     vibrate: onMobile ? [200, 100, 200] : undefined,
-    tag: 'habit-reminder', // Required when renotify is true
+    tag: 'habit-reminder',
     renotify: true,
-    // Desktop notifications should stay visible until the user interacts.
-    // Mobile devices keep the default OS-specific presentation.
-    requireInteraction: !onMobile,
+    // Show notification and keep it on screen until user interacts (click/close)
+    requireInteraction: true,
     silent: false,
     data: { url: data.url },
-    actions: data.actions || [
-      { action: "open", title: "Відкрити", icon: "/assets/icon-192.png" }
+    actions: [
+      { action: "open", title: "✅ Виконано" },
+      { action: "snooze", title: "⏰ Позже" }
     ]
   }
 
@@ -121,11 +121,22 @@ self.addEventListener("push", function(event) {
 
 self.addEventListener('notificationclick', function(event) {
   event.notification.close()
+  
+  // Handle different action clicks
+  if (event.action === 'snooze') {
+    // Snooze for 5 minutes - just close the notification
+    debugLog('⏰ [SW] Snoozed for 5 minutes')
+    return
+  }
+  
+  // Default: open the app
   const url = event.notification.data?.url || '/'
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then(windowClients => {
       for (let client of windowClients) {
-        if (client.url === url && 'focus' in client) return client.focus()
+        if (client.url === url && 'focus' in client) {
+          return client.focus()
+        }
       }
       if (clients.openWindow) return clients.openWindow(url)
     })
