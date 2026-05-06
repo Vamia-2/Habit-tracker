@@ -235,7 +235,10 @@ export default function PushSettings({ onSubscribed }){
         // Register with cache busting - add timestamp to force fresh load
         const swUrl = `/sw.js?v=${Date.now()}`
         console.log("📥 Registering Service Worker from:", swUrl)
-        const reg = await navigator.serviceWorker.register(swUrl)
+        const reg = await navigator.serviceWorker.register(swUrl, { updateViaCache: 'none' })
+        
+        // Force update check immediately
+        reg.update().catch(e => console.error("Update check failed:", e))
         
         // Listen for messages from Service Worker
         if (!window.swMessageListener) {
