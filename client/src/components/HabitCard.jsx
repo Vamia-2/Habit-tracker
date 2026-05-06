@@ -60,6 +60,15 @@ export default function HabitCard({ habit, onToggle, onDelete, onShare }) {
     return time || "09:00"
   }
 
+  const formatSnoozedUntil = (date) => {
+    if (!date) return null
+    const d = new Date(date)
+    // show date and time similar to screenshot
+    const datePart = d.toLocaleDateString('uk-UA', { year: 'numeric', month: '2-digit', day: '2-digit' })
+    const timePart = d.toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' })
+    return `${datePart} о ${timePart}`
+  }
+
   const formatCycleDays = (cycleDays) => {
     if (!Array.isArray(cycleDays) || cycleDays.length === 0) return null
 
@@ -139,6 +148,9 @@ export default function HabitCard({ habit, onToggle, onDelete, onShare }) {
         )}
         
         {habit.reminder && <span className="reminder-badge">🔔 Нагадування</span>}
+        {habit.snoozedUntil && new Date(habit.snoozedUntil) > new Date() && (
+          <span className="snoozed-badge">⏸ Відкладено до {formatSnoozedUntil(habit.snoozedUntil)}</span>
+        )}
       </div>
     </div>
   )
