@@ -30,7 +30,22 @@ export default function App(){
     }
 
     navigator.serviceWorker.addEventListener("message", onMessage)
-    return () => navigator.serviceWorker.removeEventListener("message", onMessage)
+
+    // Also listen via BroadcastChannel as a fallback
+    let bc
+    try {
+      bc = new BroadcastChannel('habit-tracker-sw')
+      bc.addEventListener('message', (ev) => {
+        if (ev?.data?.type === 'sw_push') onMessage({ data: ev.data })
+      })
+    } catch (e) {
+      bc = null
+    }
+
+    return () => {
+      navigator.serviceWorker.removeEventListener("message", onMessage)
+      try { bc?.close() } catch (e) {}
+    }
   }, [])
 
   const closeOverlay = () => setPushOverlay(null)

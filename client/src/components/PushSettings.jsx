@@ -64,9 +64,23 @@ const ensureSwMessageListener = () => {
   window.swMessageListener = true
   navigator.serviceWorker.addEventListener("message", (event) => {
     if (event.data?.type === "sw_log") {
-      console.log("📋 [From SW]", event.data.msg)
+      console.debug("📋 [From SW]", event.data.msg)
+    }
+    if (event.data?.type === "sw_push") {
+      console.info("📋 [From SW] push:", event.data.payload)
     }
   })
+
+  // BroadcastChannel fallback
+  try {
+    const bc = new BroadcastChannel('habit-tracker-sw')
+    bc.addEventListener('message', (ev) => {
+      if (ev?.data?.type === 'sw_log') console.debug('📋 [From SW BC]', ev.data.msg)
+      if (ev?.data?.type === 'sw_push') console.info('📋 [From SW BC] push:', ev.data.payload)
+    })
+  } catch (e) {
+    // Ignore
+  }
 }
 
 const pingServiceWorker = async (registration) => {
@@ -173,18 +187,7 @@ export const subscribeToPushNotifications = async () => {
     console.log("🔔 Service Worker active")
     await pingServiceWorker(readyReg)
 
-    // Local SW notification smoke test to verify rendering path independently from push delivery.
-    try {
-      await readyReg.showNotification("🧪 SW локальний тест", {
-        body: "Якщо бачите це — Service Worker може показувати сповіщення.",
-        tag: "sw-local-test",
-        requireInteraction: true,
-        data: { url: "/" }
-      })
-      console.log("✅ Local SW notification shown")
-    } catch (e) {
-      console.error("❌ Local SW notification failed:", e.message)
-    }
+    // don't show local SW notification test in production flow; rely on push test
 
     const requestSubscription = async () => {
       console.log("🔔 Requesting push subscription...")

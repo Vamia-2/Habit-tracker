@@ -1,21 +1,37 @@
 // Service Worker for push notifications - Simplified & Reliable
 
+// Minimal logging flag (set to true while debugging)
+const ENABLE_SW_LOGS = false
+
+// BroadcastChannel for robust cross-context messaging (works when postMessage may not)
+let bc
+try {
+  bc = new BroadcastChannel('habit-tracker-sw')
+} catch (e) {
+  bc = null
+}
+
 const postToClients = (payload) => {
+  // Send via postMessage to controlled pages
   self.clients
     .matchAll({ includeUncontrolled: true, type: "window" })
     .then((clientsList) => {
       for (const client of clientsList) {
-        client.postMessage(payload)
+        try { client.postMessage(payload) } catch (e) {}
       }
     })
-    .catch(() => {
-      // Ignore transport errors.
-    })
+    .catch(() => {})
+
+  // Also broadcast via BroadcastChannel for other contexts
+  try {
+    bc?.postMessage(payload)
+  } catch (e) {}
 }
 
 const log = (msg) => {
-  console.log(msg)
-  postToClients({ type: "sw_log", msg })
+  if (ENABLE_SW_LOGS) console.log(msg)
+  // surface logs to clients when debugging enabled
+  if (ENABLE_SW_LOGS) postToClients({ type: 'sw_log', msg })
 }
 
 const isMobileDevice = () => {
@@ -27,7 +43,7 @@ const isMobileDevice = () => {
 // INSTALL - Set up immediately
 // ============================================================
 self.addEventListener('install', (event) => {
-  log('[SW] Installing Service Worker')
+  if (ENABLE_SW_LOGS) log('[SW] Installing Service Worker')
   self.skipWaiting()
 })
 
@@ -35,7 +51,7 @@ self.addEventListener('install', (event) => {
 // ACTIVATE - Take control immediately
 // ============================================================
 self.addEventListener('activate', (event) => {
-  log('[SW] Activating Service Worker')
+  if (ENABLE_SW_LOGS) log('[SW] Activating Service Worker')
   event.waitUntil(clients.claim())
 })
 
@@ -43,7 +59,7 @@ self.addEventListener('activate', (event) => {
 // PUSH - Handle notifications
 // ============================================================
 self.addEventListener('push', (event) => {
-  log('🔔 [SW] PUSH EVENT RECEIVED!')
+  if (ENABLE_SW_LOGS) log('🔔 [SW] PUSH EVENT RECEIVED!')
   
   let data = {
     title: '🔔 Habit Tracker',
@@ -93,22 +109,13 @@ self.addEventListener('push', (event) => {
     ]
   }
 
-  log(`[SW] Showing notification: "${data.title}"`)
+  if (ENABLE_SW_LOGS) log(`[SW] Showing notification: "${data.title}"`)
   
   event.waitUntil(
     self.registration
       .showNotification(data.title || '🔔 Habit Tracker', options)
-      .then(() => {
-        log('✅ [SW] Notification shown!')
-      })
-      .catch((err) => {
-        log(`❌ [SW] Notification error: ${err.message}`)
-        // Fallback: try without actions
-        return self.registration.showNotification('🔔 Habit Tracker', {
-          body: data.body || 'Нове нагадування',
-          tag: 'habit-reminder',
-          requireInteraction: true
-        })
+      .catch(() => {
+        // ignore; notification may be suppressed by OS/browser
       })
   )
 })
@@ -117,7 +124,7 @@ self.addEventListener('push', (event) => {
 // NOTIFICATION CLICK - Handle user interaction
 // ============================================================
 self.addEventListener('notificationclick', (event) => {
-  log(`[SW] Notification clicked: ${event.action}`)
+  if (ENABLE_SW_LOGS) log(`[SW] Notification clicked: ${event.action}`)
   event.notification.close()
 
   const url = event.notification.data?.url || '/'
