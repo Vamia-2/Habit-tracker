@@ -66,6 +66,11 @@ const sendVerificationEmail = async (to, token) => {
   const verifyUrl = `${frontendUrl}/verify-email?token=${token}`
   const from = process.env.EMAIL_FROM || process.env.EMAIL_USER || "noreply@habit-tracker.com"
 
+  console.log(`📧 [EMAIL] Sending verification email to: ${to}`)
+  console.log(`📧 [EMAIL] SMTP: ${process.env.EMAIL_HOST}:${process.env.EMAIL_PORT}, Secure: ${process.env.EMAIL_SECURE}`)
+  console.log(`📧 [EMAIL] From: ${from}`)
+  console.log(`📧 [EMAIL] Verify URL: ${verifyUrl}`)
+
   await emailTransporter.sendMail({
     from,
     to,
@@ -422,9 +427,12 @@ app.post("/api/register", authRateLimit, async(req,res)=>{
       email: user.email
     })
 
-    void sendVerificationEmail(normalizedEmail, verificationToken).catch((emailErr) => {
-      console.error("Помилка надсилання email підтвердження:", emailErr)
-    })
+    console.log(`✅ [REGISTER] User ${user.email} created, token: ${verificationToken.substring(0, 16)}...`)
+    sendVerificationEmail(normalizedEmail, verificationToken)
+      .then(() => console.log(`✅ [EMAIL] Verification email sent to ${normalizedEmail}`))
+      .catch((emailErr) => {
+        console.error(`❌ [EMAIL] Failed to send verification email to ${normalizedEmail}:`, emailErr?.message || emailErr)
+      })
   } catch(e) {
     console.error("Registration error:", e)
 
@@ -492,20 +500,25 @@ app.get("/api/verify-email/:token", verifyEmailRateLimit, async(req,res)=>{
       return res.status(400).json("Токен підтвердження відсутній")
     }
 
+    console.log(`🔍 [VERIFY] Attempting to verify token: ${token.substring(0, 16)}...`)
+    
     const user = await User.findOne({
       emailVerificationToken: token,
       emailVerificationExpires: { $gt: new Date() }
     })
 
     if (!user) {
+      console.log(`❌ [VERIFY] Token verification failed - no matching user found or token expired`)
       return res.status(400).json("Посилання для підтвердження недійсне або термін його дії закінчився")
     }
 
+    console.log(`✅ [VERIFY] Found user for token: ${user.email}, marking as verified`)
     user.isVerified = true
     user.emailVerificationToken = null
     user.emailVerificationExpires = null
     await user.save()
 
+    console.log(`✅ [VERIFY] User ${user.email} verified successfully`)
     res.json({ message: "Email успішно підтверджено! Тепер ви можете увійти." })
   } catch(e) {
     console.error("Verify email error:", e)
@@ -537,10 +550,13 @@ app.post("/api/resend-verification", authRateLimit, async(req,res)=>{
     user.emailVerificationExpires = verificationExpires
     await user.save()
 
+    console.log(`🔄 [RESEND] Regenerated token for ${normalizedEmail}: ${verificationToken.substring(0, 16)}...`)
+
     try {
       await sendVerificationEmail(normalizedEmail, verificationToken)
+      console.log(`✅ [RESEND] Verification email resent to ${normalizedEmail}`)
     } catch (emailErr) {
-      console.error("Помилка повторного надсилання email підтвердження:", emailErr)
+      console.error(`❌ [RESEND] Failed to resend email to ${normalizedEmail}:`, emailErr?.message || emailErr)
       return res.status(500).json("Не вдалося надіслати лист підтвердження. Спробуйте пізніше.")
     }
 
