@@ -82,8 +82,9 @@ self.addEventListener("push", function(event) {
   }
 
   const onMobile = isMobileDevice()
+  const formattedBody = typeof data.body === "string" ? data.body.replace(/\n+/g, "\n") : "Нове нагадування"
   const options = {
-    body: data.body,
+    body: formattedBody,
     icon: "/assets/icon-192.png",
     badge: "/assets/badge-72.png",
     vibrate: onMobile ? [200, 100, 200] : undefined,

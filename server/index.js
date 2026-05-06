@@ -139,6 +139,20 @@ const setTimeOnDate = (sourceDate, dueTime) => {
   return date
 }
 
+const buildReminderPayload = (habit, dueAt, dueTimeLabel, isRecurring) => {
+  const habitTitle = habit?.title?.trim() || "Без назви"
+  const title = "🔔 Нагадування"
+  const body = isRecurring
+    ? `${habitTitle}\nСьогодні о ${dueTimeLabel || "--:--"}`
+    : `${habitTitle}\nНа ${dueAt.toLocaleDateString("uk-UA")} о ${dueTimeLabel || dueAt.toLocaleTimeString("uk-UA", { hour: "2-digit", minute: "2-digit" })}`
+
+  return {
+    title,
+    body,
+    url: "/"
+  }
+}
+
 const allowedOrigins = [
   process.env.FRONTEND_URL,
   "http://localhost:5173",
@@ -265,10 +279,12 @@ mongoose.connect(process.env.MONGO_URI, {
                 const recurringDueAt = setTimeOnDate(today, habit.dueTime)
                 if (today < recurringDueAt) continue
 
-                const payload = {
-                  title: `🔔 Нагадування: ${habit.title}`,
-                  body: `Цикл на сьогодні: ${today.toLocaleDateString("uk-UA")} о ${recurringDueAt.toLocaleTimeString("uk-UA", { hour: "2-digit", minute: "2-digit" })}`
-                }
+                const payload = buildReminderPayload(
+                  habit,
+                  recurringDueAt,
+                  recurringDueAt.toLocaleTimeString("uk-UA", { hour: "2-digit", minute: "2-digit" }),
+                  true
+                )
 
                 try {
                   await sendPush(habit.user.pushSubscription, payload)
@@ -289,10 +305,7 @@ mongoose.connect(process.env.MONGO_URI, {
 
               const dueTimeLabel = habit.dueTime || dueAt.toLocaleTimeString("uk-UA", { hour: "2-digit", minute: "2-digit" })
 
-              const payload = {
-                title: `🔔 Нагадування: ${habit.title}`,
-                body: `Звичка запланована на ${dueAt.toLocaleDateString("uk-UA")} о ${dueTimeLabel}`
-              }
+              const payload = buildReminderPayload(habit, dueAt, dueTimeLabel, false)
 
               try {
                 await sendPush(habit.user.pushSubscription, payload)
