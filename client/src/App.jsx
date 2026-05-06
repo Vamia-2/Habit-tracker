@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react"
+import api from "./api"
 import { BrowserRouter,Routes,Route } from "react-router-dom"
 
 import Login from "./pages/Login.jsx"
@@ -50,6 +51,36 @@ export default function App(){
 
   const closeOverlay = () => setPushOverlay(null)
 
+  const disableHabit = async (habitId) => {
+    if (!habitId) {
+      closeOverlay()
+      return
+    }
+    try {
+      await api.put(`/habits/${habitId}`, { reminder: false })
+      closeOverlay()
+      alert('Нагадування вимкнено')
+    } catch (e) {
+      console.error('Snooze/disable error', e)
+      alert('Не вдалося вимкнути нагадування')
+    }
+  }
+
+  const snoozeHabit = async (habitId, minutes = 10) => {
+    if (!habitId) {
+      closeOverlay()
+      return
+    }
+    try {
+      await api.post(`/habits/${habitId}/snooze`, { minutes })
+      closeOverlay()
+      alert(`Нагадування відкладено на ${minutes} хв.`)
+    } catch (e) {
+      console.error('Snooze error', e)
+      alert('Не вдалося відкласти нагадування')
+    }
+  }
+
   return(
     <BrowserRouter>
       <ToastHost/>
@@ -61,15 +92,12 @@ export default function App(){
             <div className="push-overlay-actions">
               <button
                 className="btn-primary"
-                onClick={() => {
-                  window.location.href = pushOverlay.url || "/"
-                  closeOverlay()
-                }}
+                onClick={() => disableHabit(pushOverlay.habitId)}
               >
-                Відкрити
+                Вимкнути
               </button>
-              <button className="btn-secondary" onClick={closeOverlay}>
-                Закрити
+              <button className="btn-secondary" onClick={() => snoozeHabit(pushOverlay.habitId, 10)}>
+                Відкласти на 10 хв
               </button>
             </div>
           </div>

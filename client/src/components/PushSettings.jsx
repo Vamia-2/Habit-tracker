@@ -241,7 +241,8 @@ export const subscribeToPushNotifications = async () => {
       await withTimeout(
         api.post("/push/send", {
         title: "✅ Push увімкнено",
-        body: "Тестове сповіщення доставлено успішно"
+        body: "Тестове сповіщення доставлено успішно",
+        skipOverlay: true
         }),
         "Тестове push-сповіщення не дійшло вчасно.",
         12000

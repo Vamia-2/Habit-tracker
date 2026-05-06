@@ -83,14 +83,18 @@ self.addEventListener('push', (event) => {
   }
 
   // In-app fallback: broadcast push payload so the page can render a full-screen reminder.
-  postToClients({
-    type: "sw_push",
-    payload: {
-      title: data.title || "🔔 Habit Tracker",
-      body: data.body || "Нове нагадування",
-      url: data.url || "/"
-    }
-  })
+  // Only post to clients when not explicitly skipped (e.g., test pushes)
+  if (!data.skipOverlay) {
+    postToClients({
+      type: "sw_push",
+      payload: {
+        title: data.title || "🔔 Habit Tracker",
+        body: data.body || "Нове нагадування",
+        url: data.url || "/",
+        habitId: data.habitId
+      }
+    })
+  }
 
   const isMobile = isMobileDevice()
   const options = {

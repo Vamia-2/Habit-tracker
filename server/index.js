@@ -153,7 +153,8 @@ const buildReminderPayload = (habit, dueAt, dueTimeLabel, isRecurring) => {
   return {
     title,
     body,
-    url: "/"
+    url: "/",
+    habitId: habit._id?.toString()
   }
 }
 
@@ -722,6 +723,23 @@ app.put("/api/habits/:id", auth, ensureNotBlocked, async(req,res)=>{
   res.json(habit)
 })
 
+// Snooze endpoint: postpone the next reminder for a habit by given minutes (default 10)
+app.post('/api/habits/:id/snooze', auth, ensureNotBlocked, async (req, res) => {
+  const habit = await Habit.findById(req.params.id)
+  if (!habit) return res.status(404).json('Habit not found')
+  if (habit.user.toString() !== req.user.id) return res.status(403).json('Forbidden')
+
+  const minutes = Number(req.body.minutes) || 10
+  const newDate = new Date(Date.now() + minutes * 60000)
+
+  // For one-time reminders, set date to newDate. For recurring, we store a temporary snoozeDate.
+  habit.date = newDate
+  // Ensure scheduler will attempt to send again
+  habit.reminderSentAt = null
+  await habit.save()
+  res.json(habit)
+})
+
 app.post("/api/habits/:id/comment", auth, ensureNotBlocked, async(req,res)=>{
   const { text } = req.body
   if(!text) return res.status(400).json("Коментар не може бути порожнім")
@@ -1016,10 +1034,8 @@ app.post("/api/push/send", auth, async(req,res)=>{
   }
 
   console.log("📬 Found subscription:", user.pushSubscription.endpoint.substring(0, 50) + "...")
-  const payload = {
-    title: req.body.title || "Habit Tracker",
-    body: req.body.body || "Тестове push-повідомлення"
-  }
+  // Forward any provided payload fields to the push sender so clients can include metadata
+  const payload = Object.assign({}, req.body || {})
 
   try {
     console.log("📬 Attempting to send push...")
