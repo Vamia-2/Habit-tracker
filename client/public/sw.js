@@ -1,6 +1,18 @@
 // Service Worker for push notifications - Simplified & Reliable
 
-const log = (msg) => console.log(msg)
+const log = (msg) => {
+  console.log(msg)
+  self.clients
+    .matchAll({ includeUncontrolled: true, type: "window" })
+    .then((clientsList) => {
+      for (const client of clientsList) {
+        client.postMessage({ type: "sw_log", msg })
+      }
+    })
+    .catch(() => {
+      // Ignore logging transport errors; console logging is enough.
+    })
+}
 
 const isMobileDevice = () => {
   const ua = self.navigator?.userAgent || ''
