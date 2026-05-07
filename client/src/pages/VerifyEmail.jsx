@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { useSearchParams } from "react-router-dom"
+import { useNavigate, useSearchParams } from "react-router-dom"
 import api from "../api"
 import { useTheme } from "../ThemeContext"
 
@@ -7,6 +7,7 @@ export default function VerifyEmail(){
   const [searchParams] = useSearchParams()
   const [status, setStatus] = useState("loading") // loading | success | error
   const [message, setMessage] = useState("")
+  const navigate = useNavigate()
   const { theme, toggleTheme } = useTheme()
 
   useEffect(() => {
@@ -49,9 +50,9 @@ export default function VerifyEmail(){
               <div style={{ fontSize: 48, marginBottom: 12 }}>✅</div>
               <h2 style={{ marginBottom: 12 }}>Готово!</h2>
               <p style={{ color: "#64748b", marginBottom: 24 }}>{message}</p>
-              <a href="/login" className="btn-primary" style={{ display: "inline-block", textDecoration: "none" }}>
+              <button className="btn-primary" onClick={() => navigate("/login")} style={{ display: "inline-block" }}>
                 Увійти
-              </a>
+              </button>
             </>
           )}
 

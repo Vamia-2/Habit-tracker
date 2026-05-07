@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { useNavigate } from "react-router-dom"
+import { Link, useNavigate } from "react-router-dom"
 import api from "../api"
 import { useTheme } from "../ThemeContext"
 
@@ -116,7 +116,7 @@ export default function Login(){
           </button>
 
           <p className="auth-switch">
-            Нема аккаунту? <a href="/register">Зареєструватися</a>
+            Нема аккаунту? <Link to="/register">Зареєструватися</Link>
           </p>
         </div>
 

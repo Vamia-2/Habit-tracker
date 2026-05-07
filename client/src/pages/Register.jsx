@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { Link } from "react-router-dom"
 import api from "../api"
 import { useTheme } from "../ThemeContext"
 
@@ -59,7 +60,7 @@ export default function Register(){
               </p>
               <p style={{ color: "#94a3b8", fontSize: 13 }}>
                 Не отримали листа?{" "}
-                <a href="/register" style={{ color: "#6366f1" }}>Зареєструватися знову</a>
+                <Link to="/register" style={{ color: "#6366f1" }}>Зареєструватися знову</Link>
               </p>
             </div>
           ) : (
@@ -116,7 +117,7 @@ export default function Register(){
               </button>
 
               <p className="auth-switch">
-                Вже є аккаунт? <a href="/login">Увійти</a>
+                Вже є аккаунт? <Link to="/login">Увійти</Link>
               </p>
             </>
           )}

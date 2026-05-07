@@ -17,6 +17,7 @@ import User from "./models/User.js"
 import Habit from "./models/Habit.js"
 import Complaint from "./models/Complaint.js"
 import Suggestion from "./models/Suggestion.js"
+import PendingRegistration from "./models/PendingRegistration.js"
 import auth from "./middleware/auth.js"
 import { sendPush } from "./push.js"
 
@@ -478,23 +479,43 @@ app.post("/api/register", authRateLimit, async(req,res)=>{
       return res.status(400).json("Пароль повинен містити мінімум 6 символів")
     }
 
+    const existingUser = await User.findOne({ email: normalizedEmail })
+    if (existingUser) {
+      return res.status(400).json("Користувач з таким email вже існує")
+    }
+
+    const existingUsername = await User.findOne({ username: username.trim() })
+    if (existingUsername) {
+      return res.status(400).json("Користувач з таким ім'ям вже існує")
+    }
+
+    const existingPending = await PendingRegistration.findOne({
+      $or: [
+        { email: normalizedEmail },
+        { username: username.trim() }
+      ]
+    })
+
+    if (existingPending) {
+      return res.status(400).json("Для цього email або імені вже очікує підтвердження реєстрація")
+    }
+
     const { token: verificationToken, expires: verificationExpires } = generateVerificationToken()
 
     const hashedPassword = await bcrypt.hash(password, 10)
-    const user = await User.create({
+    await PendingRegistration.create({
       email: normalizedEmail,
       password: hashedPassword,
       username: username.trim(),
-      isVerified: false,
       emailVerificationToken: verificationToken,
       emailVerificationExpires: verificationExpires
     })
     res.json({
       message: "Реєстрацію успішно завершено. Перевірте вашу електронну пошту для підтвердження акаунта.",
-      email: user.email
+      email: normalizedEmail
     })
 
-    console.log(`✅ [REGISTER] User ${user.email} created, token: ${verificationToken.substring(0, 16)}...`)
+    console.log(`✅ [REGISTER] Pending registration created for ${normalizedEmail}, token: ${verificationToken.substring(0, 16)}...`)
     sendVerificationEmail(normalizedEmail, verificationToken)
       .then(() => console.log(`✅ [EMAIL] Verification email sent to ${normalizedEmail}`))
       .catch((emailErr) => {
@@ -528,7 +549,18 @@ app.post("/api/login", authRateLimit, async(req,res)=>{
     }
 
     const user = await User.findOne({email: normalizedEmail})
-    if(!user) return res.status(404).json("Користувач не знайдений")
+    if(!user) {
+      const pendingRegistration = await PendingRegistration.findOne({ email: normalizedEmail })
+      if (pendingRegistration) {
+        console.log(`❌ [LOGIN] User ${normalizedEmail} attempted to login but verification is pending`)
+        return res.status(403).json({
+          code: "EMAIL_NOT_VERIFIED",
+          message: EMAIL_NOT_VERIFIED_MESSAGE
+        })
+      }
+
+      return res.status(404).json("Користувач не знайдений")
+    }
 
     if (!user.isVerified && !canBypassEmailVerification(user)) {
       console.log(`❌ [LOGIN] User ${normalizedEmail} attempted to login but not verified`)
@@ -583,8 +615,40 @@ app.get("/api/verify-email/:token", verifyEmailRateLimit, async(req,res)=>{
     })
 
     if (!user) {
+      const pendingRegistration = await PendingRegistration.findOne({
+        emailVerificationToken: token,
+        emailVerificationExpires: { $gt: new Date() }
+      })
+
+      if (!pendingRegistration) {
       console.log(`❌ [VERIFY] Token verification failed - no matching user found or token expired`)
       return res.status(400).json("Посилання для підтвердження недійсне або термін його дії закінчився")
+      }
+
+      const existingUser = await User.findOne({
+        $or: [
+          { email: pendingRegistration.email },
+          { username: pendingRegistration.username }
+        ]
+      })
+
+      if (existingUser) {
+        await PendingRegistration.deleteOne({ _id: pendingRegistration._id })
+        console.log(`ℹ️ [VERIFY] Pending registration cleaned up because user already exists for ${pendingRegistration.email}`)
+        return res.json({ message: "Email уже підтверджено. Тепер ви можете увійти." })
+      }
+
+      const createdUser = await User.create({
+        email: pendingRegistration.email,
+        password: pendingRegistration.password,
+        username: pendingRegistration.username,
+        isVerified: true
+      })
+
+      await PendingRegistration.deleteOne({ _id: pendingRegistration._id })
+
+      console.log(`✅ [VERIFY] Pending registration converted to user: ${createdUser.email}`)
+      return res.json({ message: "Email успішно підтверджено! Тепер ви можете увійти." })
     }
 
     console.log(`✅ [VERIFY] Found user for token: ${user.email}, marking as verified`)
@@ -610,20 +674,20 @@ app.post("/api/resend-verification", authRateLimit, async(req,res)=>{
       return res.status(400).json("Email обов'язковий")
     }
 
-    const user = await User.findOne({ email: normalizedEmail })
+    const pendingRegistration = await PendingRegistration.findOne({ email: normalizedEmail })
 
-    if (!user) {
+    if (!pendingRegistration) {
+      const user = await User.findOne({ email: normalizedEmail })
+      if (user?.isVerified) {
+        return res.status(400).json("Цей акаунт вже підтверджено")
+      }
       return res.status(404).json("Користувач не знайдений")
     }
 
-    if (user.isVerified) {
-      return res.status(400).json("Цей акаунт вже підтверджено")
-    }
-
     const { token: verificationToken, expires: verificationExpires } = generateVerificationToken()
-    user.emailVerificationToken = verificationToken
-    user.emailVerificationExpires = verificationExpires
-    await user.save()
+    pendingRegistration.emailVerificationToken = verificationToken
+    pendingRegistration.emailVerificationExpires = verificationExpires
+    await pendingRegistration.save()
 
     console.log(`🔄 [RESEND] Regenerated token for ${normalizedEmail}: ${verificationToken.substring(0, 16)}...`)
 
