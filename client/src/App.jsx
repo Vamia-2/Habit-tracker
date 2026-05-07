@@ -16,18 +16,15 @@ import RulesModal from "./components/RulesModal.jsx"
 
 export default function App(){
   const [pushOverlay, setPushOverlay] = useState(null)
-  const [rulesOpen, setRulesOpen] = useState(false)
-
-  useEffect(() => {
-    // Show rules on first visit for unauthenticated users
+  const [rulesOpen, setRulesOpen] = useState(() => {
     try {
       const seen = localStorage.getItem("seenRules")
       const hasToken = Boolean(localStorage.getItem("token"))
-      if (!hasToken && !seen) {
-        setRulesOpen(true)
-      }
-    } catch (e) {}
-  }, [])
+      return !hasToken && !seen
+    } catch (e) {
+      return false
+    }
+  })
 
   const closeRules = () => {
     try { localStorage.setItem("seenRules", "1") } catch(e) {}
