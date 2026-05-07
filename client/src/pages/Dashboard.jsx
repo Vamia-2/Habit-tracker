@@ -4,6 +4,7 @@ import api from "../api"
 import HabitCard from "../components/HabitCard"
 import LineChart from "../components/LineChart"
 import { useTheme } from "../ThemeContext"
+import RulesModal from "../components/RulesModal.jsx"
 
 const WEEKDAY_OPTIONS = [
   { value: 0, short: "Нд" },
@@ -470,11 +471,11 @@ export default function Dashboard({ initialSection = "habits" }){
                 <button className="menu-item" onClick={openPublicAchievementsPage}>
                   🌍 Публічні досягнення
                 </button>
-                <button className="menu-item" onClick={openComplaintPage} disabled={isBlocked}>
-                  🚨 Скарга
-                </button>
                 <button className="menu-item" onClick={openRules}>
                   📜 Правила програми
+                </button>
+                <button className="menu-item" onClick={openComplaintPage} disabled={isBlocked}>
+                  🚨 Скарга
                 </button>
                 {user?.role === "admin" && (
                   <button className="menu-item" onClick={openAdminPage}>
@@ -490,24 +491,7 @@ export default function Dashboard({ initialSection = "habits" }){
         </div>
       </div>
 
-      {rulesOpen && (
-        <div className="rules-overlay" role="dialog" aria-modal="true" aria-label="Правила програми" onClick={closeRules}>
-          <div className="rules-card" onClick={(event) => event.stopPropagation()}>
-            <div className="rules-header">
-              <h2>📜 Правила програми</h2>
-              <button className="rules-close" onClick={closeRules} aria-label="Закрити правила">×</button>
-            </div>
-            <ul className="rules-list">
-              <li>Не можна писати нецензурну лексику.</li>
-              <li>Не можна ображати себе або інших.</li>
-              <li>Не можна принижувати, погрожувати чи провокувати конфлікти.</li>
-              <li>Пишіть коректні назви звичок, скарг і пропозицій.</li>
-              <li>Дотримуйтеся поваги в спілкуванні з іншими користувачами та адміністратором.</li>
-            </ul>
-            <button className="btn-primary rules-action" onClick={closeRules}>Зрозуміло</button>
-          </div>
-        </div>
-      )}
+      <RulesModal open={rulesOpen} onClose={closeRules} />
 
       {showAnalytics && (
         <div className="analytics-panel">

@@ -12,9 +12,27 @@ import Achievements from "./pages/Achievements.jsx"
 import PublicAchievements from "./pages/PublicAchievements.jsx"
 import Cycles from "./pages/Cycles.jsx"
 import ToastHost from "./components/ToastHost.jsx"
+import RulesModal from "./components/RulesModal.jsx"
 
 export default function App(){
   const [pushOverlay, setPushOverlay] = useState(null)
+  const [rulesOpen, setRulesOpen] = useState(false)
+
+  useEffect(() => {
+    // Show rules on first visit for unauthenticated users
+    try {
+      const seen = localStorage.getItem("seenRules")
+      const hasToken = Boolean(localStorage.getItem("token"))
+      if (!hasToken && !seen) {
+        setRulesOpen(true)
+      }
+    } catch (e) {}
+  }, [])
+
+  const closeRules = () => {
+    try { localStorage.setItem("seenRules", "1") } catch(e) {}
+    setRulesOpen(false)
+  }
 
   useEffect(() => {
     if (typeof window === "undefined" || !navigator?.serviceWorker) return
@@ -84,6 +102,7 @@ export default function App(){
   return(
     <BrowserRouter>
       <ToastHost/>
+      <RulesModal open={rulesOpen} onClose={closeRules} />
       {pushOverlay && (
         <div className="push-overlay" role="alertdialog" aria-live="assertive" aria-label="Нагадування">
           <div className="push-overlay-card">
