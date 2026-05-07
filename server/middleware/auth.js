@@ -18,6 +18,7 @@ export default async (req,res,next) => {
   if (user.isBlocked && user.blockedUntil && new Date() > new Date(user.blockedUntil)) {
     user.isBlocked = false
     user.blockedUntil = null
+    user.blockReason = null
     await user.save()
   }
 
@@ -26,7 +27,8 @@ export default async (req,res,next) => {
     email: user.email,
     role: user.role,
     isBlocked: user.isBlocked,
-    blockedUntil: user.blockedUntil
+    blockedUntil: user.blockedUntil,
+    blockReason: user.blockReason
   }
 
   next()

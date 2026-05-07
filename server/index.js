@@ -1145,7 +1145,7 @@ app.get("/api/admin/users", auth, async(req,res)=>{
 })
 
 app.post("/api/admin/block/:userId", auth, async(req,res)=>{
-  if(req.user.role !== "admin") return res.sendStatus(403)
+  if(req.user.role !== "admin") return res.status(403).json("Тільки адмін може блокувати користувачів")
   if (!isValidObjectId(req.params.userId)) return res.status(400).json("Некоректний id користувача")
 
   const days = Number(req.body.days)
@@ -1164,7 +1164,7 @@ app.post("/api/admin/block/:userId", auth, async(req,res)=>{
 })
 
 app.post("/api/admin/unblock/:userId", auth, async(req,res)=>{
-  if(req.user.role !== "admin") return res.sendStatus(403)
+  if(req.user.role !== "admin") return res.status(403).json("Тільки адмін може розблокувати користувачів")
   if (!isValidObjectId(req.params.userId)) return res.status(400).json("Некоректний id користувача")
 
   const user = await User.findByIdAndUpdate(req.params.userId, {
