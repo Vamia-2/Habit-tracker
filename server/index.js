@@ -108,14 +108,35 @@ const sendVerificationEmail = async (to, token) => {
   try {
     let result
     if (useResend) {
-      result = await resend.emails.send({
-        from,
-        to,
-        subject: "Підтвердіть вашу електронну пошту — Habit Tracker",
-        html: emailHtml
-      })
-      if (result.error) {
-        throw new Error(result.error.message || JSON.stringify(result.error))
+      try {
+        result = await resend.emails.send({
+          from,
+          to,
+          subject: "Підтвердіть вашу електронну пошту — Habit Tracker",
+          html: emailHtml
+        })
+        if (result.error) {
+          throw new Error(result.error.message || JSON.stringify(result.error))
+        }
+        const messageId = result.id || result.messageId
+        console.log(`✅ [EMAIL][Resend] Verification email sent successfully to ${to}, ID: ${messageId}`)
+        return result
+      } catch (resendErr) {
+        console.error(`❌ [EMAIL][Resend] Failed to send via Resend API:`, resendErr?.message || resendErr)
+        // fallback to SMTP if configured
+        if (emailTransporter) {
+          console.log(`🔁 [EMAIL] Falling back to SMTP transport for ${to}`)
+          result = await emailTransporter.sendMail({
+            from,
+            to,
+            subject: "Підтвердіть вашу електронну пошту — Habit Tracker",
+            html: emailHtml
+          })
+          const messageId = result.id || result.messageId
+          console.log(`✅ [EMAIL][SMTP] Verification email sent successfully to ${to}, ID: ${messageId}`)
+          return result
+        }
+        throw resendErr
       }
     } else {
       result = await emailTransporter.sendMail({
@@ -124,10 +145,10 @@ const sendVerificationEmail = async (to, token) => {
         subject: "Підтвердіть вашу електронну пошту — Habit Tracker",
         html: emailHtml
       })
+      const messageId = result.id || result.messageId
+      console.log(`✅ [EMAIL][SMTP] Verification email sent successfully to ${to}, ID: ${messageId}`)
+      return result
     }
-    const messageId = result.id || result.messageId
-    console.log(`✅ [EMAIL] Verification email sent successfully to ${to}, ID: ${messageId}`)
-    return result
   } catch (error) {
     console.error(`❌ [EMAIL] Failed to send verification email to ${to}:`, error?.message || error)
     console.error(`   Error code: ${error?.code}, Response: ${error?.response}`)
