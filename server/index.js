@@ -748,7 +748,7 @@ app.get("/api/user/:id", auth, async(req,res)=>{
     agreesWithRules: user.agreesWithRules,
     rulesAgreedAt: user.rulesAgreedAt
   })
-}))
+})
 
 app.put("/api/user", auth, async(req,res)=>{
   const updates = pick(req.body, ["username", "avatar", "email"])
