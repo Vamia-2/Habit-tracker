@@ -222,6 +222,27 @@ app.options(/.*/, cors(corsOptions))
 
 app.use(express.json())
 
+// ✅ HEALTH CHECK - Public endpoint for monitoring
+app.get('/health', (req, res) => {
+  const uptime = process.uptime()
+  const mongoState = mongoose.connection.readyState === 1 ? 'connected' : 'disconnected'
+  res.json({
+    status: 'ok',
+    uptime: Math.floor(uptime),
+    mongodb: mongoState,
+    timestamp: new Date().toISOString()
+  })
+})
+
+app.get('/api/health', (req, res) => {
+  const mongoState = mongoose.connection.readyState === 1 ? 'connected' : 'disconnected'
+  res.json({
+    status: 'ok',
+    mongodb: mongoState,
+    timestamp: new Date().toISOString()
+  })
+})
+
 // ✅ MongoDB підключення з параметрами
 console.log("🔄 Підключення до MongoDB...")
 mongoose.connect(process.env.MONGO_URI, {
@@ -1215,7 +1236,12 @@ const startServer = async () => {
     process.exit(0)
   }
 
-  const listener = app.listen(PORT, () => console.log(`SERVER RUNNING on port ${PORT}`))
+  const listener = app.listen(PORT, "0.0.0.0", () => {
+    console.log(`✅ SERVER RUNNING on port ${PORT}`)
+    console.log(`📍 Frontend URL: ${process.env.FRONTEND_URL || 'not set'}`)
+    console.log(`📍 API available at: http://localhost:${PORT}/api`)
+    console.log(`📍 Health check: http://localhost:${PORT}/health`)
+  })
 
   listener.on("error", (error) => {
     if (error?.code === "EADDRINUSE") {
@@ -1225,6 +1251,15 @@ const startServer = async () => {
     }
 
     console.error("❌ Server error while starting:", error)
+  })
+
+  // Graceful shutdown for Render/Docker
+  process.on('SIGTERM', () => {
+    console.log('📛 SIGTERM received, starting graceful shutdown...')
+    listener.close(() => {
+      console.log('✅ Server closed')
+      process.exit(0)
+    })
   })
 }
 
