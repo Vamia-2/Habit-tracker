@@ -22,9 +22,10 @@
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^9.3.2",
     "nodemailer": "^8.0.7",
+    "resend": "^6.12.3",
+    "selfsigned": "^1.10.11",
     "socket.io": "^4.8.3",
-    "web-push": "^3.6.7",
-    "selfsigned": "^1.10.11"
+    "web-push": "^3.6.7"
   },
   "devDependencies": {
     "nodemon": "^3.1.11"

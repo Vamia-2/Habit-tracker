@@ -11,6 +11,7 @@ import bcrypt from "bcryptjs"
 import crypto from "crypto"
 import nodemailer from "nodemailer"
 import rateLimit from "express-rate-limit"
+import { Resend } from "resend"
 
 import User from "./models/User.js"
 import Habit from "./models/Habit.js"
@@ -43,8 +44,10 @@ const verifyEmailRateLimit = rateLimit({
   message: "Забагато запитів. Спробуйте через 15 хвилин."
 })
 
-// ✅ Email transporter
-const emailTransporter = nodemailer.createTransport({
+// ✅ Email service (Resend HTTP API)
+const useResend = !!process.env.RESEND_API_KEY
+const resend = useResend ? new Resend(process.env.RESEND_API_KEY) : null
+const emailTransporter = useResend ? null : nodemailer.createTransport({
   host: process.env.EMAIL_HOST || "smtp.gmail.com",
   port: Number(process.env.EMAIL_PORT) || 587,
   secure: process.env.EMAIL_SECURE === "true",
@@ -53,19 +56,23 @@ const emailTransporter = nodemailer.createTransport({
     pass: process.env.EMAIL_PASS
   },
   tls: {
-    rejectUnauthorized: false // Allow self-signed certs (for development)
+    rejectUnauthorized: false
   }
 })
 
 // Test email connection on startup
-emailTransporter.verify((error, success) => {
-  if (error) {
-    console.error(`❌ [EMAIL] SMTP connection failed:`, error?.message || error)
-    console.error(`   Check: EMAIL_HOST="${process.env.EMAIL_HOST}", EMAIL_PORT="${process.env.EMAIL_PORT}", EMAIL_USER="${process.env.EMAIL_USER}"`)
-  } else {
-    console.log(`✅ [EMAIL] SMTP connection verified successfully`)
-  }
-})
+if (useResend) {
+  console.log(`✅ [EMAIL] Using Resend API for email delivery`)
+} else if (emailTransporter) {
+  emailTransporter.verify((error, success) => {
+    if (error) {
+      console.error(`❌ [EMAIL] SMTP connection failed:`, error?.message || error)
+      console.error(`   Check: EMAIL_HOST="${process.env.EMAIL_HOST}", EMAIL_PORT="${process.env.EMAIL_PORT}", EMAIL_USER="${process.env.EMAIL_USER}"`)
+    } else {
+      console.log(`✅ [EMAIL] SMTP connection verified successfully`)
+    }
+  })
+}
 
 const VERIFICATION_TOKEN_EXPIRY_MS = 24 * 60 * 60 * 1000 // 24 години
 const EMAIL_NOT_VERIFIED_MESSAGE = "Вашу електронну пошту не підтверджено. Перевірте вашу пошту та натисніть посилання для підтвердження."
@@ -81,28 +88,44 @@ const sendVerificationEmail = async (to, token) => {
   const from = process.env.EMAIL_FROM || process.env.EMAIL_USER || "noreply@habit-tracker.com"
 
   console.log(`📧 [EMAIL] Sending verification email to: ${to}`)
-  console.log(`📧 [EMAIL] SMTP: ${process.env.EMAIL_HOST}:${process.env.EMAIL_PORT}, Secure: ${process.env.EMAIL_SECURE}`)
+  console.log(`📧 [EMAIL] Method: ${useResend ? 'Resend API' : `SMTP ${process.env.EMAIL_HOST}:${process.env.EMAIL_PORT}`}`)
   console.log(`📧 [EMAIL] From: ${from}`)
   console.log(`📧 [EMAIL] Verify URL: ${verifyUrl}`)
 
+  const emailHtml = `
+    <div style="font-family: 'Segoe UI', sans-serif; max-width: 480px; margin: 0 auto; padding: 24px; border-radius: 12px; border: 1px solid #e2e8f0;">
+      <h2 style="margin-bottom: 8px;">🎯 Habit Tracker</h2>
+      <p style="color: #475569;">Дякуємо за реєстрацію! Натисніть кнопку нижче, щоб підтвердити вашу електронну пошту.</p>
+      <a href="${verifyUrl}" style="display: inline-block; margin: 24px 0; padding: 12px 28px; background: #6366f1; color: #fff; border-radius: 8px; text-decoration: none; font-weight: 600;">
+        Підтвердити email
+      </a>
+      <p style="color: #94a3b8; font-size: 13px;">Посилання дійсне протягом 24 годин. Якщо ви не реєструвалися — просто ігноруйте цей лист.</p>
+      <p style="color: #cbd5e1; font-size: 12px; margin-top: 8px; word-break: break-all;">${verifyUrl}</p>
+    </div>
+  `
+
   try {
-    const result = await emailTransporter.sendMail({
-      from,
-      to,
-      subject: "Підтвердіть вашу електронну пошту — Habit Tracker",
-      html: `
-        <div style="font-family: 'Segoe UI', sans-serif; max-width: 480px; margin: 0 auto; padding: 24px; border-radius: 12px; border: 1px solid #e2e8f0;">
-          <h2 style="margin-bottom: 8px;">🎯 Habit Tracker</h2>
-          <p style="color: #475569;">Дякуємо за реєстрацію! Натисніть кнопку нижче, щоб підтвердити вашу електронну пошту.</p>
-          <a href="${verifyUrl}" style="display: inline-block; margin: 24px 0; padding: 12px 28px; background: #6366f1; color: #fff; border-radius: 8px; text-decoration: none; font-weight: 600;">
-            Підтвердити email
-          </a>
-          <p style="color: #94a3b8; font-size: 13px;">Посилання дійсне протягом 24 годин. Якщо ви не реєструвалися — просто ігноруйте цей лист.</p>
-          <p style="color: #cbd5e1; font-size: 12px; margin-top: 8px; word-break: break-all;">${verifyUrl}</p>
-        </div>
-      `
-    })
-    console.log(`✅ [EMAIL] Verification email sent successfully to ${to}, ID: ${result.messageId}`)
+    let result
+    if (useResend) {
+      result = await resend.emails.send({
+        from,
+        to,
+        subject: "Підтвердіть вашу електронну пошту — Habit Tracker",
+        html: emailHtml
+      })
+      if (result.error) {
+        throw new Error(result.error.message || JSON.stringify(result.error))
+      }
+    } else {
+      result = await emailTransporter.sendMail({
+        from,
+        to,
+        subject: "Підтвердіть вашу електронну пошту — Habit Tracker",
+        html: emailHtml
+      })
+    }
+    const messageId = result.id || result.messageId
+    console.log(`✅ [EMAIL] Verification email sent successfully to ${to}, ID: ${messageId}`)
     return result
   } catch (error) {
     console.error(`❌ [EMAIL] Failed to send verification email to ${to}:`, error?.message || error)
