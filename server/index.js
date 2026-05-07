@@ -767,7 +767,13 @@ app.post("/api/resend-verification", authRateLimit, async(req,res)=>{
       console.log(`✅ [RESEND] Verification email resent to ${normalizedEmail}`)
     } catch (emailErr) {
       console.error(`❌ [RESEND] Failed to resend email to ${normalizedEmail}:`, emailErr?.message || emailErr)
-      return res.status(500).json("Не вдалося надіслати лист підтвердження. Спробуйте пізніше.")
+      console.error(`❌ [RESEND] Error stack:`, emailErr?.stack || String(emailErr))
+      try {
+        console.error(`❌ [RESEND] Error details:`, JSON.stringify({ code: emailErr?.code, response: emailErr?.response, status: emailErr?.status }, null, 2))
+      } catch (jsonErr) {
+        // ignore stringify errors
+      }
+      return res.status(500).json({ message: "Не вдалося надіслати лист підтвердження. Спробуйте пізніше." })
     }
 
     res.json({ message: "Лист підтвердження надіслано повторно. Перевірте вашу пошту." })
