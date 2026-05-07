@@ -124,7 +124,7 @@ export default function Admin(){
       alert("Користувач розблокований")
       load()
     } catch(e) {
-      alert("Помилка розблокування")
+      alert("Помилка розблокування: " + (e.response?.data || e.message))
     }
   }
 
