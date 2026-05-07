@@ -32,7 +32,12 @@ export default function Login(){
       const data = e.response?.data
       const msg = (data && typeof data === "object" ? data.message : data) || "Помилка входу"
       setError(msg)
-      if (e.response?.status === 403 && data?.code === "EMAIL_NOT_VERIFIED") {
+      const isEmailNotVerified =
+        e.response?.status === 403 &&
+        (data?.code === "EMAIL_NOT_VERIFIED" ||
+          (typeof msg === "string" && msg.toLowerCase().includes("не підтверджено")))
+
+      if (isEmailNotVerified) {
         setNotVerified(true)
       }
     }

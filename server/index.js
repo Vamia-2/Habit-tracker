@@ -466,7 +466,10 @@ app.post("/api/login", authRateLimit, async(req,res)=>{
 
     if (!user.isVerified && !canBypassEmailVerification(user)) {
       console.log(`❌ [LOGIN] User ${normalizedEmail} attempted to login but not verified`)
-      return res.status(403).json("Вашу електронну пошту не підтверджено. Перевірте вашу пошту та натисніть посилання для підтвердження.")
+      return res.status(403).json({
+        code: "EMAIL_NOT_VERIFIED",
+        message: "Вашу електронну пошту не підтверджено. Перевірте вашу пошту та натисніть посилання для підтвердження."
+      })
     }
 
     if (user.isBlocked) {
