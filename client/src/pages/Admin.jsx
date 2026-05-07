@@ -10,11 +10,10 @@ export default function Admin(){
   const [habitsStats, setHabitsStats] = useState(null)
   const [complaints, setComplaints] = useState([])
   const [suggestions, setSuggestions] = useState([])
-  const [tab, setTab] = useState("users") // users, stats, complaints, suggestions
+  const [tab, setTab] = useState("users")
   const [userSearch, setUserSearch] = useState("")
   const [blockDays, setBlockDays] = useState(7)
-  const [blockReasons, setBlockReasons] = useState({}) // { userId: reason }
-  const [selectedUser, setSelectedUser] = useState(null)
+  const [blockReasons, setBlockReasons] = useState({})
   const { theme, toggleTheme } = useTheme()
   const navigate = useNavigate()
 
@@ -37,7 +36,7 @@ export default function Admin(){
       setHabitsStats(habitsStatsRes.data)
       setComplaints(complaintsRes.data)
       setSuggestions(suggestionsRes.data)
-    } catch(e) {
+    } catch (e) {
       const status = e?.response?.status
       if (status === 401) {
         alert("Сесія завершилась. Увійдіть знову")
@@ -60,7 +59,7 @@ export default function Admin(){
       await api.put(`/complaint/${complaintId}`, { status })
       alert(`Скаргу ${status === 'approved' ? 'підтверджено' : 'відхилено'}`)
       load()
-    } catch(e) {
+    } catch {
       alert("Не вдалося оновити статус скарги")
     }
   }
@@ -70,7 +69,7 @@ export default function Admin(){
       await api.delete(`/complaint/${complaintId}`)
       alert("Скаргу видалено")
       load()
-    } catch(e) {
+    } catch {
       alert("Не вдалося видалити скаргу")
     }
   }
@@ -80,7 +79,7 @@ export default function Admin(){
       await api.put(`/suggestion/${suggestionId}`, { status: "read" })
       alert("Пропозицію позначено як прочитану")
       load()
-    } catch(e) {
+    } catch {
       alert("Не вдалося оновити пропозицію")
     }
   }
@@ -90,39 +89,36 @@ export default function Admin(){
       await api.delete(`/suggestion/${suggestionId}`)
       alert("Пропозицію видалено")
       load()
-    } catch(e) {
+    } catch {
       alert("Не вдалося видалити пропозицію")
     }
   }
 
   useEffect(() => { load() }, [])
 
-    useEffect(() => {
-      // Auto-refresh admin data every 30 seconds
-      const interval = setInterval(() => {
-        load()
-      }, 30000)
-      return () => clearInterval(interval)
-    }, [])
+  useEffect(() => {
+    const interval = setInterval(load, 30000)
+    return () => clearInterval(interval)
+  }, [])
 
   const blockUser = async (userId) => {
-    if(!blockDays || blockDays < 1) {
+    if (!blockDays || blockDays < 1) {
       alert("Введіть кількість днів")
       return
     }
-    
+
     const reason = blockReasons[userId]?.trim()
-    if(!reason) {
+    if (!reason) {
       alert("Введіть причину блокування")
       return
     }
-    
+
     try {
       await api.post(`/admin/block/${userId}`, { days: blockDays, reason })
       alert(`Користувач заблокований на ${blockDays} днів`)
-      setBlockReasons(prev => ({ ...prev, [userId]: "" }))
+      setBlockReasons((prev) => ({ ...prev, [userId]: "" }))
       load()
-    } catch(e) {
+    } catch (e) {
       alert("Помилка блокування: " + (e.response?.data || e.message))
     }
   }
@@ -132,7 +128,7 @@ export default function Admin(){
       await api.post(`/admin/unblock/${userId}`, {})
       alert("Користувач розблокований")
       load()
-    } catch(e) {
+    } catch (e) {
       alert("Помилка розблокування: " + (e.response?.data || e.message))
     }
   }
@@ -143,20 +139,24 @@ export default function Admin(){
       await api.put(`/admin/role/${userId}`, { role: newRole })
       alert(`Роль користувача змінено на ${newRole}`)
       load()
-    } catch (e) {
+    } catch {
       alert("Помилка зміни ролі")
     }
   }
 
   const deleteUser = async (userId) => {
-
     try {
       await api.delete(`/admin/user/${userId}`)
       load()
-    } catch (e) {
+    } catch {
       alert("Не вдалося видалити користувача")
     }
   }
+
+  const filteredUsers = users.filter((user) =>
+    (user.username || "").toLowerCase().includes(userSearch.toLowerCase()) ||
+    (user.email || "").toLowerCase().includes(userSearch.toLowerCase())
+  )
 
   return (
     <div className={`admin-page ${theme}`}>
@@ -172,33 +172,12 @@ export default function Admin(){
         </div>
 
         <div className="admin-tabs">
-          <button 
-            className={`tab ${tab === "users" ? "active" : ""}`}
-            onClick={() => setTab("users")}
-          >
-            👥 Користувачі ({users.length})
-          </button>
-          <button 
-            className={`tab ${tab === "stats" ? "active" : ""}`}
-            onClick={() => setTab("stats")}
-          >
-            📊 Статистика
-          </button>
-          <button 
-            className={`tab ${tab === "complaints" ? "active" : ""}`}
-            onClick={() => setTab("complaints")}
-          >
-            📣 Скарги ({complaints.length})
-          </button>
-          <button 
-            className={`tab ${tab === "suggestions" ? "active" : ""}`}
-            onClick={() => setTab("suggestions")}
-          >
-            💡 Пропозиції ({suggestions.length})
-          </button>
+          <button className={`tab ${tab === "users" ? "active" : ""}`} onClick={() => setTab("users")}>👥 Користувачі ({users.length})</button>
+          <button className={`tab ${tab === "stats" ? "active" : ""}`} onClick={() => setTab("stats")}>📊 Статистика</button>
+          <button className={`tab ${tab === "complaints" ? "active" : ""}`} onClick={() => setTab("complaints")}>📣 Скарги ({complaints.length})</button>
+          <button className={`tab ${tab === "suggestions" ? "active" : ""}`} onClick={() => setTab("suggestions")}>💡 Пропозиції ({suggestions.length})</button>
         </div>
 
-        {/* === USERS TAB === */}
         {tab === "users" && (
           <div className="admin-content">
             <h2>Управління користувачами</h2>
@@ -207,167 +186,122 @@ export default function Admin(){
                 type="search"
                 placeholder="Пошук користувача за email або іменем"
                 value={userSearch}
-                onChange={e => setUserSearch(e.target.value)}
+                onChange={(e) => setUserSearch(e.target.value)}
                 className="user-search-input"
               />
             </div>
+
             <div className="users-table">
-              {users
-                .filter(u =>
-                  u.username?.toLowerCase().includes(userSearch.toLowerCase()) ||
-                  u.email.toLowerCase().includes(userSearch.toLowerCase())
-                )
-                .map(u => (
-                  <div key={u._id} className="user-row">
-                  <div className="user-info">
-                    <p className="user-name">{u.username || u.email}</p>
-                    <p className="user-email">{u.email}</p>
-                    <div className="user-badges">
-                      <span className={`badge ${u.role === "admin" ? "admin" : "user"}`}>
-                        {u.role === "admin" ? "👑 Адмін" : "👤 Користувач"}
-                      </span>
-                      {u.isBlocked && (
-                        <span className="badge blocked">🔒 Заблоковано</span>
+              {filteredUsers.map((user) => {
+                const isPending = user.accountStatus === "pending"
+
+                return (
+                  <div key={user._id} className={`user-row ${isPending ? "pending" : ""}`}>
+                    <div className="user-info">
+                      <p className="user-name">{user.username || user.email}</p>
+                      <p className="user-email">{user.email}</p>
+                      <div className="user-badges">
+                        <span className={`badge ${user.role === "admin" ? "admin" : isPending ? "pending" : "user"}`}>
+                          {user.role === "admin" ? "👑 Адмін" : isPending ? "⏳ Очікує підтвердження" : "👤 Користувач"}
+                        </span>
+                        {user.isBlocked && <span className="badge blocked">🔒 Заблоковано</span>}
+                      </div>
+                      {user.isBlocked && user.blockReason && (
+                        <p className="block-reason-display"><strong>Причина:</strong> {user.blockReason}</p>
                       )}
                     </div>
-                    {u.isBlocked && u.blockReason && (
-                      <p className="block-reason-display">
-                        <strong>Причина:</strong> {u.blockReason}
-                      </p>
-                    )}
+
+                    <div className="user-actions">
+                      {isPending ? (
+                        <span className="pending-note">Дії доступні після підтвердження email</span>
+                      ) : (
+                        <>
+                          <button className={user.role === "admin" ? "btn-secondary" : "btn-success"} onClick={() => toggleRole(user._id, user.role)}>
+                            {user.role === "admin" ? "👤 Зробити користувачем" : "👑 Зробити адміном"}
+                          </button>
+                          <button className="btn-danger" onClick={() => deleteUser(user._id)}>
+                            🗑️ Видалити
+                          </button>
+                          {user.isBlocked ? (
+                            <button className="btn-success" onClick={() => unblockUser(user._id)}>
+                              🔓 Розблокувати
+                            </button>
+                          ) : (
+                            <>
+                              <input
+                                type="number"
+                                min="1"
+                                placeholder="Дні"
+                                value={blockDays}
+                                onChange={(e) => setBlockDays(Number(e.target.value))}
+                                className="block-input"
+                              />
+                              <input
+                                type="text"
+                                maxLength="500"
+                                placeholder="Причина блокування (обов'язково)"
+                                value={blockReasons[user._id] || ""}
+                                onChange={(e) => setBlockReasons((prev) => ({ ...prev, [user._id]: e.target.value }))}
+                                className="block-reason-input"
+                              />
+                              <button className="btn-danger" onClick={() => blockUser(user._id)}>
+                                🔒 Заблокувати
+                              </button>
+                            </>
+                          )}
+                        </>
+                      )}
+                    </div>
                   </div>
-                  
-                  <div className="user-actions">
-                    <button
-                      className={u.role === "admin" ? "btn-secondary" : "btn-success"}
-                      onClick={() => toggleRole(u._id, u.role)}
-                    >
-                      {u.role === "admin" ? "👤 Зробити користувачем" : "👑 Зробити адміном"}
-                    </button>
-                    <button
-                      className="btn-danger"
-                      onClick={() => deleteUser(u._id, u.username || u.email)}
-                    >
-                      🗑️ Видалити
-                    </button>
-                    {u.isBlocked ? (
-                      <button 
-                        className="btn-success"
-                        onClick={() => unblockUser(u._id)}
-                      >
-                        🔓 Розблокувати
-                      </button>
-                    ) : (
-                      <>
-                        <input 
-                          type="number"
-                          min="1"
-                          placeholder="Дні"
-                          value={blockDays}
-                          onChange={e => setBlockDays(Number(e.target.value))}
-                          className="block-input"
-                        />
-                        <input 
-                          type="text"
-                          maxLength="500"
-                          placeholder="Причина блокування (обов'язково)"
-                          value={blockReasons[u._id] || ""}
-                          onChange={e => setBlockReasons(prev => ({ ...prev, [u._id]: e.target.value }))}
-                          className="block-reason-input"
-                        />
-                        <button 
-                          className="btn-danger"
-                          onClick={() => blockUser(u._id)}
-                        >
-                          🔒 Заблокувати
-                        </button>
-                      </>
-                    )}
-                  </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           </div>
         )}
 
-        {/* === STATS TAB === */}
         {tab === "stats" && (
           <div className="admin-content">
             <h2>📊 Аналітика звичок</h2>
-            
             {habitsStats ? (
               <>
-                {/* Загальна статистика */}
                 <div className="stats-overview">
-                  <div className="stat-card">
-                    <h3>📝 Всього звичок</h3>
-                    <p className="stat-number">{habitsStats.totalHabits}</p>
-                  </div>
-                  <div className="stat-card">
-                    <h3>✅ Виконаних</h3>
-                    <p className="stat-number">{habitsStats.completedHabits}</p>
-                  </div>
-                  <div className="stat-card">
-                    <h3>📈 Відсоток виконання</h3>
-                    <p className="stat-number">
-                      {habitsStats.totalHabits > 0 
-                        ? Math.round((habitsStats.completedHabits / habitsStats.totalHabits) * 100) 
-                        : 0}%
-                    </p>
-                  </div>
-                  <div className="stat-card">
-                    <h3>👥 Активних користувачів</h3>
-                    <p className="stat-number">{habitsStats.userStats.length}</p>
-                  </div>
+                  <div className="stat-card"><h3>📝 Всього звичок</h3><p className="stat-number">{habitsStats.totalHabits}</p></div>
+                  <div className="stat-card"><h3>✅ Виконаних</h3><p className="stat-number">{habitsStats.completedHabits}</p></div>
+                  <div className="stat-card"><h3>📈 Відсоток виконання</h3><p className="stat-number">{habitsStats.totalHabits > 0 ? Math.round((habitsStats.completedHabits / habitsStats.totalHabits) * 100) : 0}%</p></div>
+                  <div className="stat-card"><h3>👥 Активних користувачів</h3><p className="stat-number">{habitsStats.userStats.length}</p></div>
                 </div>
 
-                {/* Графіки */}
                 <div className="charts-section">
                   <div className="chart-container">
                     <h3>📊 Активність по днях (останні 30 днів)</h3>
                     <div className="chart-wrapper">
-                      <LineChart habits={habitsStats.dailyStats.map(day => ({
-                        completedDates: Array(day.completed).fill(day.date)
-                      }))} />
+                      <LineChart habits={habitsStats.dailyStats.map((day) => ({ completedDates: Array(day.completed).fill(day.date) }))} />
                     </div>
                   </div>
-
                   <div className="chart-container">
                     <h3>📊 Рейтинг користувачів по виконанню</h3>
                     <div className="chart-wrapper">
                       <BarChart habits={habitsStats.userStats
                         .sort((a, b) => b.completionRate - a.completionRate)
                         .slice(0, 10)
-                        .map(stat => ({
-                          title: stat.user.username || stat.user.email,
-                          completedDates: Array(stat.completedHabits).fill('completed')
-                        }))} />
+                        .map((stat) => ({ title: stat.user.username || stat.user.email, completedDates: Array(stat.completedHabits).fill("completed") }))} />
                     </div>
                   </div>
                 </div>
 
-                {/* Детальна статистика по користувачах */}
                 <div className="user-stats-section">
                   <h3>👥 Статистика по користувачах</h3>
                   <div className="user-stats-table">
-                    {habitsStats.userStats
-                      .sort((a, b) => b.totalHabits - a.totalHabits)
-                      .map(stat => (
+                    {habitsStats.userStats.sort((a, b) => b.totalHabits - a.totalHabits).map((stat) => (
                       <div key={stat.user._id} className="user-stat-row">
                         <div className="user-stat-info">
                           <p className="user-stat-name">{stat.user.username || stat.user.email}</p>
                           <p className="user-stat-email">{stat.user.email}</p>
                         </div>
                         <div className="user-stat-numbers">
-                          <span className="stat-item">
-                            📝 {stat.totalHabits} звичок
-                          </span>
-                          <span className="stat-item">
-                            ✅ {stat.completedHabits} виконано
-                          </span>
-                          <span className="stat-item completion-rate">
-                            📈 {stat.completionRate}%
-                          </span>
+                          <span className="stat-item">📝 {stat.totalHabits} звичок</span>
+                          <span className="stat-item">✅ {stat.completedHabits} виконано</span>
+                          <span className="stat-item completion-rate">📈 {stat.completionRate}%</span>
                         </div>
                       </div>
                     ))}
@@ -385,47 +319,26 @@ export default function Admin(){
             <h2>📣 Керування скаргами</h2>
             <div className="complaints-list">
               {complaints.length > 0 ? complaints.map((complaint) => (
-                <div key={complaint._id} className={`complaint-card ${complaint.status || 'pending'}`}>
+                <div key={complaint._id} className={`complaint-card ${complaint.status || "pending"}`}>
                   <div className="complaint-header">
                     <div>
                       <h3>{complaint.reason}</h3>
                       <p>Від: {complaint.reporter?.username || complaint.reporter?.email || complaint.reporterEmail}</p>
                       <p>На: {complaint.reportedUser?.username || complaint.reportedUser?.email || complaint.reportedUserEmail}</p>
                     </div>
-                            <span className="complaint-badge">
-                      {complaint.status === 'approved' ? 'ПІДТВЕРДЖЕНО' : complaint.status === 'rejected' ? 'ВІДХИЛЕНО' : 'В ОБРОБЦІ'}
-                    </span>
+                    <span className="complaint-badge">{complaint.status === "approved" ? "ПІДТВЕРДЖЕНО" : complaint.status === "rejected" ? "ВІДХИЛЕНО" : "В ОБРОБЦІ"}</span>
                   </div>
                   <div className="complaint-body">
-                    <p>{complaint.description || 'Без опису'}</p>
+                    <p>{complaint.description || "Без опису"}</p>
                     <p><strong>Дата:</strong> {new Date(complaint.createdAt).toLocaleString()}</p>
                   </div>
                   <div className="complaint-actions">
-                    <button
-                      className="btn-success"
-                      onClick={() => updateComplaintStatus(complaint._id, 'approved')}
-                      disabled={complaint.status === 'approved'}
-                    >
-                      Підтвердити
-                    </button>
-                    <button
-                      className="btn-secondary"
-                      onClick={() => updateComplaintStatus(complaint._id, 'rejected')}
-                      disabled={complaint.status === 'rejected'}
-                    >
-                      Відхилити
-                    </button>
-                    <button
-                      className="btn-danger"
-                      onClick={() => deleteComplaint(complaint._id)}
-                    >
-                      Видалити
-                    </button>
+                    <button className="btn-success" onClick={() => updateComplaintStatus(complaint._id, "approved")} disabled={complaint.status === "approved"}>Підтвердити</button>
+                    <button className="btn-secondary" onClick={() => updateComplaintStatus(complaint._id, "rejected")} disabled={complaint.status === "rejected"}>Відхилити</button>
+                    <button className="btn-danger" onClick={() => deleteComplaint(complaint._id)}>Видалити</button>
                   </div>
                 </div>
-              )) : (
-                <p>Немає нових скарг.</p>
-              )}
+              )) : <p>Немає нових скарг.</p>}
             </div>
           </div>
         )}
@@ -435,39 +348,24 @@ export default function Admin(){
             <h2>💡 Керування пропозиціями</h2>
             <div className="complaints-list">
               {suggestions.length > 0 ? suggestions.map((suggestion) => (
-                <div key={suggestion._id} className={`complaint-card ${suggestion.status || 'pending'}`}>
+                <div key={suggestion._id} className={`complaint-card ${suggestion.status || "pending"}`}>
                   <div className="complaint-header">
                     <div>
                       <h3>Пропозиція</h3>
                       <p>Від: {suggestion.reporter?.username || suggestion.reporter?.email || suggestion.reporterEmail}</p>
                     </div>
-                    <span className="complaint-badge">
-                      {suggestion.status === 'read' ? 'ПРОЧИТАНО' : 'НОВА'}
-                    </span>
+                    <span className="complaint-badge">{suggestion.status === "read" ? "ПРОЧИТАНО" : "НОВА"}</span>
                   </div>
                   <div className="complaint-body">
                     <p>{suggestion.text}</p>
                     <p><strong>Дата:</strong> {new Date(suggestion.createdAt).toLocaleString()}</p>
                   </div>
                   <div className="complaint-actions">
-                    <button
-                      className="btn-success"
-                      onClick={() => markSuggestionRead(suggestion._id)}
-                      disabled={suggestion.status === 'read'}
-                    >
-                      Позначити прочитаною
-                    </button>
-                    <button
-                      className="btn-danger"
-                      onClick={() => deleteSuggestion(suggestion._id)}
-                    >
-                      Видалити
-                    </button>
+                    <button className="btn-success" onClick={() => markSuggestionRead(suggestion._id)} disabled={suggestion.status === "read"}>Позначити прочитаною</button>
+                    <button className="btn-danger" onClick={() => deleteSuggestion(suggestion._id)}>Видалити</button>
                   </div>
                 </div>
-              )) : (
-                <p>Немає нових пропозицій.</p>
-              )}
+              )) : <p>Немає нових пропозицій.</p>}
             </div>
           </div>
         )}

@@ -1496,6 +1496,21 @@ button:disabled {
   color: #fca5a5;
 }
 
+.badge.pending {
+  background: rgba(245, 158, 11, 0.2);
+  color: #fbbf24;
+}
+
+.user-row.pending {
+  border: 1px dashed rgba(245, 158, 11, 0.45);
+}
+
+.pending-note {
+  color: #fbbf24;
+  font-size: 14px;
+  font-weight: 600;
+}
+
 .user-actions {
   display: flex;
   gap: 12px;

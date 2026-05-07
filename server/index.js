@@ -1255,8 +1255,41 @@ app.delete("/api/suggestion/:id", auth, async(req,res)=>{
 // ✅ ADMIN
 app.get("/api/admin/users", auth, async(req,res)=>{
   if(req.user.role !== "admin") return res.sendStatus(403)
-  const users = await User.find().select("email username avatar role isBlocked blockedUntil blockReason createdAt followers following")
-  res.json(users)
+  const [users, pendingRegistrations] = await Promise.all([
+    User.find().select("email username avatar role isBlocked blockedUntil blockReason createdAt followers following isVerified"),
+    PendingRegistration.find().select("email username createdAt")
+  ])
+
+  const existingEmails = new Set(users.map((user) => normalizeEmail(user.email)))
+  const pendingUsers = pendingRegistrations
+    .filter((pending) => !existingEmails.has(normalizeEmail(pending.email)))
+    .map((pending) => ({
+      _id: `pending:${pending._id.toString()}`,
+      email: pending.email,
+      username: pending.username,
+      avatar: "👤",
+      role: "pending",
+      isBlocked: false,
+      blockedUntil: null,
+      blockReason: null,
+      isVerified: false,
+      accountStatus: "pending",
+      pendingRegistration: true,
+      createdAt: pending.createdAt
+    }))
+
+  const activeUsers = users.map((user) => ({
+    ...user.toObject(),
+    accountStatus: user.isVerified ? "active" : "unverified"
+  }))
+
+  const combinedUsers = [...activeUsers, ...pendingUsers].sort((a, b) => {
+    const aTime = new Date(a.createdAt || 0).getTime()
+    const bTime = new Date(b.createdAt || 0).getTime()
+    return bTime - aTime
+  })
+
+  res.json(combinedUsers)
 })
 
 app.post("/api/admin/block/:userId", auth, async(req,res)=>{
