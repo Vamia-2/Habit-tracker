@@ -32,27 +32,43 @@ If you still don't see notifications, keep the tab open and the in-app overlay w
 
 **Email verification** is required for new user registration.
 
-### Setup
+### Setup (Gmail with App Password)
 
-1. Set up Gmail App Password (recommended for Gmail):
+**Important:** You must use a Google App Password, NOT your regular Gmail password!
+
+1. Enable 2-step verification on your Google account:
+   - Go to [myaccount.google.com/security](https://myaccount.google.com/security)
+   - Enable "2-Step Verification"
+
+2. Generate App Password:
    - Go to [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords)
-   - Select App: "Mail" | Device: "Windows Computer"
-   - Copy the 16-character password
+   - Select App: **Mail** | Device: **Windows Computer** (or other)
+   - Google will generate a 16-character password like: `qutc bxam awyi efas`
 
-2. Add to `.env`:
+3. Add to `.env` file:
    ```
    EMAIL_HOST=smtp.gmail.com
    EMAIL_PORT=587
    EMAIL_SECURE=false
    EMAIL_USER=your-email@gmail.com
-   EMAIL_PASS=your-app-password
+   EMAIL_PASS=qutcbxamawiyefas
    EMAIL_FROM=noreply@habit-tracker.com
-   FRONTEND_URL=http://localhost:5173  # or https://your-deployed-url
+   FRONTEND_URL=https://your-deployed-url-or-localhost:5173
    ```
+   **Note:** Remove spaces from the app password in `.env` (e.g., `qutcbxamawiyefas` not `qutc bxam awyi efas`)
 
-3. Restart server for changes to take effect.
+4. Restart the server for changes to take effect
 
-### Testing Email Setup
+### Verify Email Configuration
+
+**On server startup**, you should see in logs:
+```
+✅ [EMAIL] SMTP connection verified successfully
+```
+
+If you see an error, your email credentials are incorrect.
+
+### Testing Email Delivery
 
 **Test endpoint** (development only):
 ```bash
@@ -61,21 +77,43 @@ curl -X POST http://localhost:5000/api/debug/send-test-email \
   -d '{"email":"test@example.com"}'
 ```
 
-If test email succeeds but registration emails don't arrive, check:
-- Server logs for `[EMAIL]` messages after registration
-- Spam/Junk folder in your email
-- Email credentials in `.env` are correct (especially `EMAIL_PASS` with no extra spaces)
+Expected success response:
+```json
+{"success": true, "message": "Test email sent successfully"}
+```
+
+If test fails, check:
+1. `.env` EMAIL_* variables are set correctly (no extra spaces)
+2. Google 2-step verification is enabled
+3. App password was generated correctly
+4. Email hasn't reached daily sending limit (usually 500+ per day)
+5. Check spam/junk folder
 
 ### Troubleshooting Registration Emails
 
-1. **Check server logs** for `📧 [EMAIL]` or `❌ [EMAIL]` messages
-2. **Verify token generation**: Look for `✅ [REGISTER] User ... token:` in logs
-3. **Check email credentials**: Run test email endpoint above
-4. **Resend verification**: POST to `/api/resend-verification` with `{"email":"user@example.com"}`
+After registering a new user, check server logs:
 
-### User Login After Verification
+**Success logs:**
+```
+✅ [REGISTER] User user@example.com created, token: abc123def456...
+✅ [EMAIL] Verification email sent successfully to user@example.com, ID: <message-id>
+```
 
-- Unverified users can register but must verify email before first login
-- After clicking the verification link, `isVerified` is set to `true` and user can log in
+**Failure logs:**
+```
+❌ [EMAIL] Failed to send verification email to user@example.com: Invalid login
+```
+
+**Common errors:**
+- `Invalid login` → Wrong email/password (use app password, not regular password)
+- `ECONNREFUSED` → SMTP connection failed (wrong host/port)
+- `401 Unauthorized` → Credentials rejected (check for spaces in password)
+
+### User Login After Email Verification
+
+- After registration, users receive verification email
+- User must click the link in email to verify
+- Only verified users can log in
 - Verification link expires after **24 hours**
+- Can resend verification via `/api/resend-verification` endpoint
 

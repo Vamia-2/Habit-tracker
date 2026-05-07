@@ -51,6 +51,19 @@ const emailTransporter = nodemailer.createTransport({
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS
+  },
+  tls: {
+    rejectUnauthorized: false // Allow self-signed certs (for development)
+  }
+})
+
+// Test email connection on startup
+emailTransporter.verify((error, success) => {
+  if (error) {
+    console.error(`❌ [EMAIL] SMTP connection failed:`, error?.message || error)
+    console.error(`   Check: EMAIL_HOST="${process.env.EMAIL_HOST}", EMAIL_PORT="${process.env.EMAIL_PORT}", EMAIL_USER="${process.env.EMAIL_USER}"`)
+  } else {
+    console.log(`✅ [EMAIL] SMTP connection verified successfully`)
   }
 })
 
@@ -72,22 +85,30 @@ const sendVerificationEmail = async (to, token) => {
   console.log(`📧 [EMAIL] From: ${from}`)
   console.log(`📧 [EMAIL] Verify URL: ${verifyUrl}`)
 
-  await emailTransporter.sendMail({
-    from,
-    to,
-    subject: "Підтвердіть вашу електронну пошту — Habit Tracker",
-    html: `
-      <div style="font-family: 'Segoe UI', sans-serif; max-width: 480px; margin: 0 auto; padding: 24px; border-radius: 12px; border: 1px solid #e2e8f0;">
-        <h2 style="margin-bottom: 8px;">🎯 Habit Tracker</h2>
-        <p style="color: #475569;">Дякуємо за реєстрацію! Натисніть кнопку нижче, щоб підтвердити вашу електронну пошту.</p>
-        <a href="${verifyUrl}" style="display: inline-block; margin: 24px 0; padding: 12px 28px; background: #6366f1; color: #fff; border-radius: 8px; text-decoration: none; font-weight: 600;">
-          Підтвердити email
-        </a>
-        <p style="color: #94a3b8; font-size: 13px;">Посилання дійсне протягом 24 годин. Якщо ви не реєструвалися — просто ігноруйте цей лист.</p>
-        <p style="color: #cbd5e1; font-size: 12px; margin-top: 8px; word-break: break-all;">${verifyUrl}</p>
-      </div>
-    `
-  })
+  try {
+    const result = await emailTransporter.sendMail({
+      from,
+      to,
+      subject: "Підтвердіть вашу електронну пошту — Habit Tracker",
+      html: `
+        <div style="font-family: 'Segoe UI', sans-serif; max-width: 480px; margin: 0 auto; padding: 24px; border-radius: 12px; border: 1px solid #e2e8f0;">
+          <h2 style="margin-bottom: 8px;">🎯 Habit Tracker</h2>
+          <p style="color: #475569;">Дякуємо за реєстрацію! Натисніть кнопку нижче, щоб підтвердити вашу електронну пошту.</p>
+          <a href="${verifyUrl}" style="display: inline-block; margin: 24px 0; padding: 12px 28px; background: #6366f1; color: #fff; border-radius: 8px; text-decoration: none; font-weight: 600;">
+            Підтвердити email
+          </a>
+          <p style="color: #94a3b8; font-size: 13px;">Посилання дійсне протягом 24 годин. Якщо ви не реєструвалися — просто ігноруйте цей лист.</p>
+          <p style="color: #cbd5e1; font-size: 12px; margin-top: 8px; word-break: break-all;">${verifyUrl}</p>
+        </div>
+      `
+    })
+    console.log(`✅ [EMAIL] Verification email sent successfully to ${to}, ID: ${result.messageId}`)
+    return result
+  } catch (error) {
+    console.error(`❌ [EMAIL] Failed to send verification email to ${to}:`, error?.message || error)
+    console.error(`   Error code: ${error?.code}, Response: ${error?.response}`)
+    throw error
+  }
 }
 
 const isValidObjectId = (value) => mongoose.Types.ObjectId.isValid(value)
