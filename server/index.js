@@ -785,16 +785,18 @@ app.post("/api/debug/send-test-email", async(req, res) => {
   
   try {
     console.log(`🧪 [DEBUG] Sending test email to: ${email}`)
-    await emailTransporter.sendMail({
-      from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
-      to: email,
-      subject: "Test Email from Habit Tracker",
-      html: `<p>This is a test email to verify SMTP configuration is working.</p><p>Email config: ${process.env.EMAIL_HOST}:${process.env.EMAIL_PORT}</p>`
-    })
-    res.json({ success: true, message: "Test email sent successfully" })
+    if (!useResend && !emailTransporter) {
+      console.warn('⚠️ [DEBUG] No email transport configured (Resend API key or SMTP env vars missing)')
+      return res.status(501).json({ success: false, error: 'No email transport configured. Set RESEND_API_KEY or SMTP env vars.' })
+    }
+
+    // Use the same sendVerificationEmail helper so Resend+SMTP fallback is exercised
+    const { token } = generateVerificationToken()
+    await sendVerificationEmail(email, token)
+    res.json({ success: true, message: "Test email sent (via configured transport)" })
   } catch (e) {
     console.error(`❌ [DEBUG] Test email failed:`, e?.message)
-    res.status(500).json({ success: false, error: e?.message })
+    res.status(500).json({ success: false, error: e?.message || String(e) })
   }
 })
 
