@@ -45,26 +45,33 @@ const verifyEmailRateLimit = rateLimit({
   message: "Забагато запитів. Спробуйте через 15 хвилин."
 })
 
-// ✅ Email service (Resend HTTP API)
+// ✅ Email service (Resend HTTP API) + optional SMTP transporter for fallback
 const useResend = !!process.env.RESEND_API_KEY
 const resend = useResend ? new Resend(process.env.RESEND_API_KEY) : null
-const emailTransporter = useResend ? null : nodemailer.createTransport({
-  host: process.env.EMAIL_HOST || "smtp.gmail.com",
-  port: Number(process.env.EMAIL_PORT) || 587,
-  secure: process.env.EMAIL_SECURE === "true",
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS
-  },
-  tls: {
-    rejectUnauthorized: false
-  }
-})
+
+let emailTransporter = null
+// Create SMTP transporter if SMTP env vars are provided (allow fallback even when using Resend)
+if (process.env.EMAIL_HOST && process.env.EMAIL_USER && process.env.EMAIL_PASS) {
+  emailTransporter = nodemailer.createTransport({
+    host: process.env.EMAIL_HOST || "smtp.gmail.com",
+    port: Number(process.env.EMAIL_PORT) || 587,
+    secure: process.env.EMAIL_SECURE === "true",
+    auth: {
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_PASS
+    },
+    tls: {
+      rejectUnauthorized: false
+    }
+  })
+}
 
 // Test email connection on startup
 if (useResend) {
   console.log(`✅ [EMAIL] Using Resend API for email delivery`)
-} else if (emailTransporter) {
+}
+
+if (emailTransporter) {
   emailTransporter.verify((error, success) => {
     if (error) {
       console.error(`❌ [EMAIL] SMTP connection failed:`, error?.message || error)
@@ -73,6 +80,8 @@ if (useResend) {
       console.log(`✅ [EMAIL] SMTP connection verified successfully`)
     }
   })
+} else {
+  console.log(`ℹ️ [EMAIL] No SMTP transporter configured (EMAIL_HOST/EMAIL_USER/EMAIL_PASS missing)`)
 }
 
 const VERIFICATION_TOKEN_EXPIRY_MS = 24 * 60 * 60 * 1000 // 24 години
