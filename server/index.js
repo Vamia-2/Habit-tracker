@@ -488,11 +488,13 @@ mongoose.connect(process.env.MONGO_URI, {
 // ✅ AUTH
 app.post("/api/register", authRateLimit, async(req,res)=>{
   try {
+    console.log('🔍 [REGISTER] Incoming payload:', req.body)
     const { email, password, username } = req.body
     const normalizedEmail = normalizeEmail(email)
 
     // Валідація
     if (!normalizedEmail || !password || !username?.trim()) {
+      console.warn('❗ [REGISTER] Validation failed: missing fields', { normalizedEmail, hasPassword: !!password, username })
       return res.status(400).json("Всі поля обов'язкові")
     }
 
@@ -502,11 +504,13 @@ app.post("/api/register", authRateLimit, async(req,res)=>{
 
     const existingUser = await User.findOne({ email: normalizedEmail })
     if (existingUser) {
+      console.warn(`❗ [REGISTER] Email already exists: ${normalizedEmail}`)
       return res.status(400).json("Користувач з таким email вже існує")
     }
 
     const existingUsername = await User.findOne({ username: username.trim() })
     if (existingUsername) {
+      console.warn(`❗ [REGISTER] Username already exists: ${username.trim()}`)
       return res.status(400).json("Користувач з таким ім'ям вже існує")
     }
 
@@ -518,6 +522,7 @@ app.post("/api/register", authRateLimit, async(req,res)=>{
     })
 
     if (existingPending) {
+      console.warn(`❗ [REGISTER] Pending registration exists for email/username: ${normalizedEmail}/${username.trim()}`)
       return res.status(400).json("Для цього email або імені вже очікує підтвердження реєстрація")
     }
 
