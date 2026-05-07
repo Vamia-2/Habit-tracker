@@ -442,7 +442,7 @@ export default function Dashboard({ initialSection = "habits" }){
   return (
     <div className={`dashboard ${theme}`}>
       <div className="dashboard-header">
-        <h1>🎯 My Habits</h1>
+        <h1>🎯 My Habits {user?.agreesWithRules && <span title="Ви прийняли правила програми">✅</span>}</h1>
         <div className="header-controls">
           <div className="menu-wrap" ref={menuRef}>
             <button

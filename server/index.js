@@ -732,7 +732,7 @@ app.get("/api/user/:id", auth, async(req,res)=>{
   if (!isValidObjectId(req.params.id)) return res.status(400).json("Некоректний id користувача")
   if (req.user.id !== req.params.id && req.user.role !== "admin") return res.sendStatus(403)
 
-  const user = await User.findById(req.params.id).select("email username avatar role isBlocked blockedUntil createdAt pushSubscription")
+  const user = await User.findById(req.params.id).select("email username avatar role isBlocked blockedUntil createdAt pushSubscription agreesWithRules rulesAgreedAt")
   if(!user) return res.status(404).json("No user")
 
   res.json({
@@ -744,9 +744,11 @@ app.get("/api/user/:id", auth, async(req,res)=>{
     isBlocked: user.isBlocked,
     blockedUntil: user.blockedUntil,
     createdAt: user.createdAt,
-    hasPushSubscription: Boolean(user.pushSubscription)
+    hasPushSubscription: Boolean(user.pushSubscription),
+    agreesWithRules: user.agreesWithRules,
+    rulesAgreedAt: user.rulesAgreedAt
   })
-})
+}))
 
 app.put("/api/user", auth, async(req,res)=>{
   const updates = pick(req.body, ["username", "avatar", "email"])
@@ -775,6 +777,24 @@ app.put("/api/user", auth, async(req,res)=>{
     isBlocked: user.isBlocked,
     blockedUntil: user.blockedUntil
   })
+})
+
+// ✅ RULES AGREEMENT
+app.post("/api/agree-with-rules", auth, async(req,res)=>{
+  try {
+    const user = await User.findByIdAndUpdate(
+      req.user.id,
+      {
+        agreesWithRules: true,
+        rulesAgreedAt: new Date()
+      },
+      { new: true }
+    )
+    res.json({ message: "✅ Ви прийняли правила програми", agreesWithRules: user.agreesWithRules, rulesAgreedAt: user.rulesAgreedAt })
+  } catch(e) {
+    console.error("Agreement error:", e)
+    res.status(500).json("Помилка при збереженні факту погодження")
+  }
 })
 
 // ✅ FOLLOW SYSTEM
