@@ -1556,6 +1556,26 @@ button:disabled {
   color: #92400e;
 }
 
+.block-reason-user {
+  margin-top: 12px;
+  padding: 12px;
+  background: rgba(239, 68, 68, 0.15);
+  border-left: 4px solid #ef4444;
+  border-radius: 6px;
+  font-size: 14px;
+  color: #dc2626;
+}
+
+.dashboard.dark .block-reason-user {
+  background: rgba(239, 68, 68, 0.2);
+  color: #fca5a5;
+}
+
+.dashboard.light .block-reason-user {
+  background: rgba(239, 68, 68, 0.1);
+  color: #991b1b;
+}
+
 /* ===== COMPLAINTS ===== */
 .complaints-list {
   display: flex;

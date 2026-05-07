@@ -13,7 +13,7 @@ export default function Admin(){
   const [tab, setTab] = useState("users") // users, stats, complaints, suggestions
   const [userSearch, setUserSearch] = useState("")
   const [blockDays, setBlockDays] = useState(7)
-  const [blockReason, setBlockReason] = useState("")
+  const [blockReasons, setBlockReasons] = useState({}) // { userId: reason }
   const [selectedUser, setSelectedUser] = useState(null)
   const { theme, toggleTheme } = useTheme()
   const navigate = useNavigate()
@@ -103,15 +103,16 @@ export default function Admin(){
       return
     }
     
-    if(!blockReason.trim()) {
+    const reason = blockReasons[userId]?.trim()
+    if(!reason) {
       alert("Введіть причину блокування")
       return
     }
     
     try {
-      await api.post(`/admin/block/${userId}`, { days: blockDays, reason: blockReason })
+      await api.post(`/admin/block/${userId}`, { days: blockDays, reason })
       alert(`Користувач заблокований на ${blockDays} днів`)
-      setBlockReason("")
+      setBlockReasons(prev => ({ ...prev, [userId]: "" }))
       load()
     } catch(e) {
       alert("Помилка блокування: " + (e.response?.data || e.message))
@@ -262,8 +263,8 @@ export default function Admin(){
                           type="text"
                           maxLength="500"
                           placeholder="Причина блокування (обов'язково)"
-                          value={blockReason}
-                          onChange={e => setBlockReason(e.target.value)}
+                          value={blockReasons[u._id] || ""}
+                          onChange={e => setBlockReasons(prev => ({ ...prev, [u._id]: e.target.value }))}
                           className="block-reason-input"
                         />
                         <button 

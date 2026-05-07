@@ -542,8 +542,13 @@ export default function Dashboard({ initialSection = "habits" }){
 
       {isBlocked && (
         <div className="blocked-banner">
-          <h2>Ви заблоковані на {blockedDays} {blockedDays === 1 ? "день" : "днів"}</h2>
+          <h2>🔒 Ви заблоковані на {blockedDays} {blockedDays === 1 ? "день" : "днів"}</h2>
           <p>Ви не можете створювати нові звички, змінювати існуючі або писати коментарі до завершення блокування.</p>
+          {user?.blockReason && (
+            <div className="block-reason-user">
+              <strong>Причина блокування:</strong> {user.blockReason}
+            </div>
+          )}
         </div>
       )}
 
