@@ -55,6 +55,7 @@ const emailTransporter = nodemailer.createTransport({
 })
 
 const VERIFICATION_TOKEN_EXPIRY_MS = 24 * 60 * 60 * 1000 // 24 години
+const EMAIL_NOT_VERIFIED_MESSAGE = "Вашу електронну пошту не підтверджено. Перевірте вашу пошту та натисніть посилання для підтвердження."
 
 const generateVerificationToken = () => ({
   token: crypto.randomBytes(32).toString("hex"),
@@ -466,7 +467,10 @@ app.post("/api/login", authRateLimit, async(req,res)=>{
 
     if (!user.isVerified && !canBypassEmailVerification(user)) {
       console.log(`❌ [LOGIN] User ${normalizedEmail} attempted to login but not verified`)
-      return res.status(403).json("Вашу електронну пошту не підтверджено. Перевірте вашу пошту та натисніть посилання для підтвердження.")
+      return res.status(403).json({
+        code: "EMAIL_NOT_VERIFIED",
+        message: EMAIL_NOT_VERIFIED_MESSAGE
+      })
     }
 
     if (user.isBlocked) {
