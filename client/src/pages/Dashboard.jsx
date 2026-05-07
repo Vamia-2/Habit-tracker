@@ -54,6 +54,7 @@ export default function Dashboard({ initialSection = "habits" }){
   const [cycleDays, setCycleDays] = useState([])
   const [user, setUser] = useState(null)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [rulesOpen, setRulesOpen] = useState(false)
   const [suggestionOpen, setSuggestionOpen] = useState(false)
   const [suggestionText, setSuggestionText] = useState("")
   const [sendingSuggestion, setSendingSuggestion] = useState(false)
@@ -343,6 +344,15 @@ export default function Dashboard({ initialSection = "habits" }){
     navigate("/admin")
   }
 
+  const openRules = () => {
+    setMenuOpen(false)
+    setRulesOpen(true)
+  }
+
+  const closeRules = () => {
+    setRulesOpen(false)
+  }
+
   const openAchievementsPage = () => {
     setMenuOpen(false)
     navigate("/achievements")
@@ -463,6 +473,9 @@ export default function Dashboard({ initialSection = "habits" }){
                 <button className="menu-item" onClick={openComplaintPage} disabled={isBlocked}>
                   🚨 Скарга
                 </button>
+                <button className="menu-item" onClick={openRules}>
+                  📜 Правила програми
+                </button>
                 {user?.role === "admin" && (
                   <button className="menu-item" onClick={openAdminPage}>
                     ⚙️ Адмін
@@ -476,6 +489,25 @@ export default function Dashboard({ initialSection = "habits" }){
           </div>
         </div>
       </div>
+
+      {rulesOpen && (
+        <div className="rules-overlay" role="dialog" aria-modal="true" aria-label="Правила програми" onClick={closeRules}>
+          <div className="rules-card" onClick={(event) => event.stopPropagation()}>
+            <div className="rules-header">
+              <h2>📜 Правила програми</h2>
+              <button className="rules-close" onClick={closeRules} aria-label="Закрити правила">×</button>
+            </div>
+            <ul className="rules-list">
+              <li>Не можна писати нецензурну лексику.</li>
+              <li>Не можна ображати себе або інших.</li>
+              <li>Не можна принижувати, погрожувати чи провокувати конфлікти.</li>
+              <li>Пишіть коректні назви звичок, скарг і пропозицій.</li>
+              <li>Дотримуйтеся поваги в спілкуванні з іншими користувачами та адміністратором.</li>
+            </ul>
+            <button className="btn-primary rules-action" onClick={closeRules}>Зрозуміло</button>
+          </div>
+        </div>
+      )}
 
       {showAnalytics && (
         <div className="analytics-panel">
