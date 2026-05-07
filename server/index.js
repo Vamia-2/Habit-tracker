@@ -598,6 +598,42 @@ app.post("/api/login", authRateLimit, async(req,res)=>{
   }
 })
 
+// ✅ GRANT ADMIN ROLE (for development/setup)
+app.post("/api/grant-admin", async(req,res)=>{
+  const { email, adminKey } = req.body
+  
+  if (!email || !adminKey) {
+    return res.status(400).json("Email та ключ адміна обов'язкові")
+  }
+  
+  const SECRET_ADMIN_KEY = process.env.SECRET_ADMIN_KEY
+  if (!SECRET_ADMIN_KEY) {
+    return res.status(501).json("SECRET_ADMIN_KEY не налаштовано на сервері")
+  }
+  
+  if (adminKey !== SECRET_ADMIN_KEY) {
+    return res.status(403).json("Невірний ключ адміна")
+  }
+  
+  try {
+    const user = await User.findOneAndUpdate(
+      { email: email.toLowerCase() },
+      { role: "admin" },
+      { new: true }
+    )
+    
+    if (!user) {
+      return res.status(404).json("Користувача не знайдено")
+    }
+    
+    console.log(`👑 Admin role granted to ${email}`)
+    res.json({ message: `Admin role granted to ${email}`, user })
+  } catch(e) {
+    console.error("Grant admin error:", e)
+    res.status(500).json("Помилка при наданні ролі адміна")
+  }
+})
+
 // ✅ EMAIL VERIFICATION
 app.get("/api/verify-email/:token", verifyEmailRateLimit, async(req,res)=>{
   try {
