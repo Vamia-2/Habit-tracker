@@ -102,6 +102,7 @@ const pick = (source, allowedKeys) => {
 }
 
 const normalizeEmail = (email) => (typeof email === "string" ? email.trim().toLowerCase() : "")
+const canBypassEmailVerification = (user) => user?.role === "admin"
 
 const normalizeCycleDays = (value) => {
   if (!Array.isArray(value)) return []
@@ -463,7 +464,7 @@ app.post("/api/login", authRateLimit, async(req,res)=>{
     const user = await User.findOne({email: normalizedEmail})
     if(!user) return res.status(404).json("Користувач не знайдений")
 
-    if (!user.isVerified) {
+    if (!user.isVerified && !canBypassEmailVerification(user)) {
       console.log(`❌ [LOGIN] User ${normalizedEmail} attempted to login but not verified`)
       return res.status(403).json("Вашу електронну пошту не підтверджено. Перевірте вашу пошту та натисніть посилання для підтвердження.")
     }
