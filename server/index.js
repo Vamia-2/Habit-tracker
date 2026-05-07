@@ -102,10 +102,7 @@ const pick = (source, allowedKeys) => {
 }
 
 const normalizeEmail = (email) => (typeof email === "string" ? email.trim().toLowerCase() : "")
-const ADMIN_VERIFICATION_BYPASS_EMAIL = normalizeEmail(process.env.DEFAULT_ADMIN_EMAIL)
-const canBypassEmailVerification = (user) =>
-  user?.role === "admin" ||
-  (ADMIN_VERIFICATION_BYPASS_EMAIL && normalizeEmail(user?.email) === ADMIN_VERIFICATION_BYPASS_EMAIL)
+const canBypassEmailVerification = (user) => user?.role === "admin"
 
 const normalizeCycleDays = (value) => {
   if (!Array.isArray(value)) return []
