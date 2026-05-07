@@ -66,6 +66,9 @@ if (process.env.EMAIL_HOST && process.env.EMAIL_USER && process.env.EMAIL_PASS) 
   })
 }
 
+// In-memory last email error for quick debug (not persisted)
+let lastEmailError = null
+
 // Test email connection on startup
 if (useResend) {
   console.log(`✅ [EMAIL] Using Resend API for email delivery`)
@@ -161,6 +164,14 @@ const sendVerificationEmail = async (to, token) => {
   } catch (error) {
     console.error(`❌ [EMAIL] Failed to send verification email to ${to}:`, error?.message || error)
     console.error(`   Error code: ${error?.code}, Response: ${error?.response}`)
+    lastEmailError = {
+      to,
+      message: error?.message || String(error),
+      stack: error?.stack || null,
+      code: error?.code || null,
+      response: error?.response || null,
+      timestamp: new Date().toISOString()
+    }
     throw error
   }
 }
@@ -773,6 +784,15 @@ app.post("/api/resend-verification", authRateLimit, async(req,res)=>{
       } catch (jsonErr) {
         // ignore stringify errors
       }
+      // store last email error for debugging
+      lastEmailError = {
+        to: normalizedEmail,
+        message: emailErr?.message || String(emailErr),
+        stack: emailErr?.stack || null,
+        code: emailErr?.code || null,
+        response: emailErr?.response || null,
+        timestamp: new Date().toISOString()
+      }
       return res.status(500).json({ message: "Не вдалося надіслати лист підтвердження. Спробуйте пізніше." })
     }
 
@@ -804,6 +824,22 @@ app.post("/api/debug/send-test-email", async(req, res) => {
     console.error(`❌ [DEBUG] Test email failed:`, e?.message)
     res.status(500).json({ success: false, error: e?.message || String(e) })
   }
+})
+
+// 🔎 DEBUG: return last email error (non-sensitive, development only)
+app.get('/api/debug/last-email-error', async (req, res) => {
+  if (!lastEmailError) return res.status(404).json({ found: false })
+  res.json({ found: true, lastEmailError })
+})
+
+// 🔎 DEBUG: lookup pending registration and user by email (development only)
+app.post('/api/debug/pending-registration', async (req, res) => {
+  const { email } = req.body
+  if (!email) return res.status(400).json({ error: 'Email required' })
+  const normalizedEmail = normalizeEmail(email)
+  const pending = await PendingRegistration.findOne({ email: normalizedEmail }).lean()
+  const user = await User.findOne({ email: normalizedEmail }).select('-password').lean()
+  res.json({ pending, user })
 })
 
 // ✅ USER PROFILE
