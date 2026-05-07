@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom"
 import api from "../api"
 import { useTheme } from "../ThemeContext"
 
+const EMAIL_NOT_VERIFIED_MESSAGE = "Вашу електронну пошту не підтверджено. Перевірте вашу пошту та натисніть посилання для підтвердження."
+
 export default function Login(){
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
@@ -34,8 +36,7 @@ export default function Login(){
       setError(msg)
       const isEmailNotVerified =
         e.response?.status === 403 &&
-        (data?.code === "EMAIL_NOT_VERIFIED" ||
-          (typeof msg === "string" && msg.toLowerCase().includes("не підтверджено")))
+        (data?.code === "EMAIL_NOT_VERIFIED" || msg === EMAIL_NOT_VERIFIED_MESSAGE)
 
       if (isEmailNotVerified) {
         setNotVerified(true)
