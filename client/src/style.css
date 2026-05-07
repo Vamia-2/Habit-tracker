@@ -1516,6 +1516,46 @@ button:disabled {
   color: #f1f5f9 !important;
 }
 
+.block-reason-input {
+  flex: 1;
+  min-width: 200px;
+  padding: 8px 12px !important;
+  border-radius: 8px !important;
+  border: 2px solid #e2e8f0 !important;
+  font-family: inherit;
+}
+
+.admin-page.dark .block-reason-input {
+  background: rgba(30, 41, 59, 0.6) !important;
+  border-color: #475569 !important;
+  color: #f1f5f9 !important;
+}
+
+.admin-page.light .block-reason-input {
+  background: #fff !important;
+  border-color: #cbd5e1 !important;
+  color: #1e293b !important;
+}
+
+.block-reason-display {
+  margin-top: 8px;
+  padding: 8px;
+  border-left: 3px solid #f59e0b;
+  background: rgba(245, 158, 11, 0.1);
+  font-size: 14px;
+  border-radius: 4px;
+}
+
+.admin-page.dark .block-reason-display {
+  background: rgba(245, 158, 11, 0.15);
+  color: #fcd34d;
+}
+
+.admin-page.light .block-reason-display {
+  background: rgba(245, 158, 11, 0.1);
+  color: #92400e;
+}
+
 /* ===== COMPLAINTS ===== */
 .complaints-list {
   display: flex;

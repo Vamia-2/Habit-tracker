@@ -8,6 +8,7 @@ export default mongoose.model("User", new mongoose.Schema({
   role: { type: String, default: "user" },
   isBlocked: { type: Boolean, default: false },
   blockedUntil: Date,
+  blockReason: { type: String, default: null },
   isVerified: { type: Boolean, default: false },
   emailVerificationToken: { type: String, default: null },
   emailVerificationExpires: { type: Date, default: null },

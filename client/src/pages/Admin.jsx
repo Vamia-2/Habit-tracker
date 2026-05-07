@@ -13,6 +13,7 @@ export default function Admin(){
   const [tab, setTab] = useState("users") // users, stats, complaints, suggestions
   const [userSearch, setUserSearch] = useState("")
   const [blockDays, setBlockDays] = useState(7)
+  const [blockReason, setBlockReason] = useState("")
   const [selectedUser, setSelectedUser] = useState(null)
   const { theme, toggleTheme } = useTheme()
   const navigate = useNavigate()
@@ -102,12 +103,18 @@ export default function Admin(){
       return
     }
     
+    if(!blockReason.trim()) {
+      alert("Введіть причину блокування")
+      return
+    }
+    
     try {
-      await api.post(`/admin/block/${userId}`, { days: blockDays })
+      await api.post(`/admin/block/${userId}`, { days: blockDays, reason: blockReason })
       alert(`Користувач заблокований на ${blockDays} днів`)
+      setBlockReason("")
       load()
     } catch(e) {
-      alert("Помилка блокування")
+      alert("Помилка блокування: " + (e.response?.data || e.message))
     }
   }
 
@@ -214,6 +221,11 @@ export default function Admin(){
                         <span className="badge blocked">🔒 Заблоковано</span>
                       )}
                     </div>
+                    {u.isBlocked && u.blockReason && (
+                      <p className="block-reason-display">
+                        <strong>Причина:</strong> {u.blockReason}
+                      </p>
+                    )}
                   </div>
                   
                   <div className="user-actions">
@@ -245,6 +257,14 @@ export default function Admin(){
                           value={blockDays}
                           onChange={e => setBlockDays(Number(e.target.value))}
                           className="block-input"
+                        />
+                        <input 
+                          type="text"
+                          maxLength="500"
+                          placeholder="Причина блокування (обов'язково)"
+                          value={blockReason}
+                          onChange={e => setBlockReason(e.target.value)}
+                          className="block-reason-input"
                         />
                         <button 
                           className="btn-danger"

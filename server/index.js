@@ -732,7 +732,7 @@ app.get("/api/user/:id", auth, async(req,res)=>{
   if (!isValidObjectId(req.params.id)) return res.status(400).json("Некоректний id користувача")
   if (req.user.id !== req.params.id && req.user.role !== "admin") return res.sendStatus(403)
 
-  const user = await User.findById(req.params.id).select("email username avatar role isBlocked blockedUntil createdAt pushSubscription agreesWithRules rulesAgreedAt")
+  const user = await User.findById(req.params.id).select("email username avatar role isBlocked blockedUntil blockReason createdAt pushSubscription agreesWithRules rulesAgreedAt")
   if(!user) return res.status(404).json("No user")
 
   res.json({
@@ -743,6 +743,7 @@ app.get("/api/user/:id", auth, async(req,res)=>{
     role: user.role,
     isBlocked: user.isBlocked,
     blockedUntil: user.blockedUntil,
+    blockReason: user.blockReason,
     createdAt: user.createdAt,
     hasPushSubscription: Boolean(user.pushSubscription),
     agreesWithRules: user.agreesWithRules,
@@ -1139,7 +1140,7 @@ app.delete("/api/suggestion/:id", auth, async(req,res)=>{
 // ✅ ADMIN
 app.get("/api/admin/users", auth, async(req,res)=>{
   if(req.user.role !== "admin") return res.sendStatus(403)
-  const users = await User.find().select("email username avatar role isBlocked blockedUntil createdAt followers following")
+  const users = await User.find().select("email username avatar role isBlocked blockedUntil blockReason createdAt followers following")
   res.json(users)
 })
 
@@ -1149,11 +1150,15 @@ app.post("/api/admin/block/:userId", auth, async(req,res)=>{
 
   const days = Number(req.body.days)
   if (!Number.isFinite(days) || days < 1 || days > 365) return res.status(400).json("Некоректна кількість днів")
+  
+  const reason = req.body.reason ? String(req.body.reason).trim() : "Причина не вказана"
+  if (reason.length > 500) return res.status(400).json("Причина занадто довга (максимум 500 символів)")
 
   const blockedUntil = new Date(Date.now() + days * 24 * 60 * 60 * 1000)
   const user = await User.findByIdAndUpdate(req.params.userId, {
     isBlocked: true,
-    blockedUntil
+    blockedUntil,
+    blockReason: reason
   }, {new: true})
   res.json(user)
 })
@@ -1164,7 +1169,8 @@ app.post("/api/admin/unblock/:userId", auth, async(req,res)=>{
 
   const user = await User.findByIdAndUpdate(req.params.userId, {
     isBlocked: false,
-    blockedUntil: null
+    blockedUntil: null,
+    blockReason: null
   }, {new: true})
   res.json(user)
 })
