@@ -122,6 +122,14 @@ export default function Dashboard({ initialSection = "habits" }){
 
   useEffect(() => { load() }, [])
 
+    useEffect(() => {
+      // Auto-refresh data every 30 seconds
+      const interval = setInterval(() => {
+        load()
+      }, 30000)
+      return () => clearInterval(interval)
+    }, [])
+
   const logout = () => {
     localStorage.removeItem("token")
     navigate("/login")

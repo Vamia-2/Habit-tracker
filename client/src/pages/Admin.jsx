@@ -97,6 +97,14 @@ export default function Admin(){
 
   useEffect(() => { load() }, [])
 
+    useEffect(() => {
+      // Auto-refresh admin data every 30 seconds
+      const interval = setInterval(() => {
+        load()
+      }, 30000)
+      return () => clearInterval(interval)
+    }, [])
+
   const blockUser = async (userId) => {
     if(!blockDays || blockDays < 1) {
       alert("Введіть кількість днів")
