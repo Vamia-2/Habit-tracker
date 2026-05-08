@@ -73,6 +73,15 @@ const buildSmtpTransport = (portOverride) => nodemailer.createTransport({
   }
 })
 
+const getSmtpEnvSummary = () => ({
+  host: process.env.EMAIL_HOST ? "set" : "missing",
+  port: process.env.EMAIL_PORT ? String(process.env.EMAIL_PORT) : "default(587)",
+  user: process.env.EMAIL_USER ? "set" : "missing",
+  pass: process.env.EMAIL_PASS ? "set" : "missing",
+  secure: process.env.EMAIL_SECURE ? String(process.env.EMAIL_SECURE) : "default(false/465)",
+  fallback: String(process.env.EMAIL_SMTP_FALLBACK ?? "true")
+})
+
 let emailTransporter = null
 if (process.env.EMAIL_HOST && process.env.EMAIL_USER && process.env.EMAIL_PASS) {
   emailTransporter = buildSmtpTransport()
@@ -89,6 +98,7 @@ if (useResend) {
 console.log(
   `ℹ️ [EMAIL] Config: Resend=${useResend ? "on" : "off"}, SMTP=${emailTransporter ? "on" : "off"}, EMAIL_FROM=${process.env.EMAIL_FROM ? "set" : "missing"}`
 )
+console.log(`ℹ️ [EMAIL] SMTP env summary: ${JSON.stringify(getSmtpEnvSummary())}`)
 
 if (!useResend) {
   console.warn(`⚠️ [EMAIL] RESEND_API_KEY is missing; verification emails will fail until it is configured.`)
@@ -98,6 +108,7 @@ if (emailTransporter) {
   emailTransporter.verify((error) => {
     if (error) {
       console.error(`❌ [EMAIL] SMTP connection failed:`, error?.message || error)
+      console.error(`   SMTP env:`, getSmtpEnvSummary())
       if (/ENETUNREACH|ETIMEDOUT|ECONNREFUSED|ESOCKET/i.test(error?.code || error?.message || "")) {
         try {
           const fallbackTransport = buildSmtpTransport(587)
@@ -189,6 +200,7 @@ const sendVerificationEmail = async (to, token) => {
         : null
 
       console.error(`❌ [EMAIL][SMTP] Failed for ${to}:`, smtpError?.message || smtpError)
+      console.error(`   SMTP env:`, getSmtpEnvSummary())
       if (/ENETUNREACH|ETIMEDOUT|ECONNREFUSED|ESOCKET/i.test(smtpError?.code || smtpError?.message || "") && process.env.EMAIL_PORT === "465") {
         try {
           const fallbackTransport = buildSmtpTransport(587)
@@ -216,6 +228,7 @@ const sendVerificationEmail = async (to, token) => {
         code: smtpError?.code || null,
         response: smtpError?.response || null,
         hint: actionableHint,
+        smtpEnv: getSmtpEnvSummary(),
         timestamp: new Date().toISOString()
       }
       throw smtpError
@@ -238,6 +251,7 @@ const sendVerificationEmail = async (to, token) => {
     code: terminalError?.code || null,
     response: terminalError?.response || null,
     hint: actionableHint,
+    smtpEnv: getSmtpEnvSummary(),
     timestamp: new Date().toISOString()
   }
   throw terminalError
