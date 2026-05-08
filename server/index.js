@@ -55,7 +55,7 @@ const resend = useResend ? new Resend(process.env.RESEND_API_KEY) : null
 const useSmtpFallback = process.env.EMAIL_SMTP_FALLBACK !== "false"
 
 const buildSmtpTransport = (portOverride) => nodemailer.createTransport({
-  host: process.env.EMAIL_HOST || "smtp.gmail.com",
+  host: process.env.EMAIL_HOST,
   port: (() => {
     const configuredPort = Number(portOverride ?? process.env.EMAIL_PORT) || 587
     return configuredPort === 465 ? 587 : configuredPort

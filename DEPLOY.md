@@ -94,6 +94,22 @@ JWT_SECRET=your-super-secret-key-12345678
 PORT=5000
 ```
 
+Якщо хочете, щоб email-підтвердження працювали для всіх користувачів, додайте ще змінні для поштового сервісу:
+```
+RESEND_API_KEY=...
+EMAIL_FROM=noreply@your-verified-domain.com
+
+# Або SMTP-провайдер (SendGrid, Mailgun, Brevo, інший поштовий relay)
+EMAIL_HOST=smtp.your-provider.com
+EMAIL_PORT=587
+EMAIL_USER=your-smtp-user
+EMAIL_PASS=your-smtp-password
+EMAIL_SECURE=false
+EMAIL_SMTP_FALLBACK=true
+```
+
+Примітка: Gmail SMTP тут не рекомендується, бо Render часто не може достукатися до нього стабільно.
+
 ### Крок 4: Запуск локально
 
 **Terminal 1 - Сервер:**
@@ -174,6 +190,14 @@ git push origin main
    MONGO_URI=mongodb+srv://...
    JWT_SECRET=your-secret-key
    PORT=5000
+  RESEND_API_KEY=...
+  EMAIL_FROM=noreply@your-verified-domain.com
+  EMAIL_HOST=smtp.your-provider.com
+  EMAIL_PORT=587
+  EMAIL_USER=your-smtp-user
+  EMAIL_PASS=your-smtp-password
+  EMAIL_SECURE=false
+  EMAIL_SMTP_FALLBACK=true
    ```
 5. Натиснути "Create Web Service"
 
