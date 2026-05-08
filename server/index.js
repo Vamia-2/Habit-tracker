@@ -56,10 +56,13 @@ const useSmtpFallback = process.env.EMAIL_SMTP_FALLBACK !== "false"
 
 const buildSmtpTransport = (portOverride) => nodemailer.createTransport({
   host: process.env.EMAIL_HOST || "smtp.gmail.com",
-  port: Number(portOverride ?? process.env.EMAIL_PORT) || 587,
+  port: (() => {
+    const configuredPort = Number(portOverride ?? process.env.EMAIL_PORT) || 587
+    return configuredPort === 465 ? 587 : configuredPort
+  })(),
   secure: typeof process.env.EMAIL_SECURE === "string"
     ? process.env.EMAIL_SECURE === "true"
-    : Number(portOverride ?? process.env.EMAIL_PORT) === 465,
+    : false,
   family: 4,
   connectionTimeout: Number(process.env.EMAIL_CONNECTION_TIMEOUT_MS) || 10000,
   greetingTimeout: Number(process.env.EMAIL_GREETING_TIMEOUT_MS) || 10000,
@@ -76,6 +79,7 @@ const buildSmtpTransport = (portOverride) => nodemailer.createTransport({
 const getSmtpEnvSummary = () => ({
   host: process.env.EMAIL_HOST ? "set" : "missing",
   port: process.env.EMAIL_PORT ? String(process.env.EMAIL_PORT) : "default(587)",
+  effectivePort: String((Number(process.env.EMAIL_PORT) || 587) === 465 ? 587 : (Number(process.env.EMAIL_PORT) || 587)),
   user: process.env.EMAIL_USER ? "set" : "missing",
   pass: process.env.EMAIL_PASS ? "set" : "missing",
   secure: process.env.EMAIL_SECURE ? String(process.env.EMAIL_SECURE) : "default(false/465)",
