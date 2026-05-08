@@ -9,6 +9,7 @@ import { fileURLToPath } from "url"
 import dotenv from "dotenv"
 import bcrypt from "bcryptjs"
 import crypto from "crypto"
+import nodemailer from "nodemailer"
 import rateLimit from "express-rate-limit"
 import { Resend } from "resend"
 
@@ -51,6 +52,24 @@ const verifyEmailRateLimit = rateLimit({
 // ✅ Email service (Resend HTTP API)
 const useResend = !!process.env.RESEND_API_KEY
 const resend = useResend ? new Resend(process.env.RESEND_API_KEY) : null
+const useSmtpFallback = process.env.EMAIL_SMTP_FALLBACK !== "false"
+
+let emailTransporter = null
+if (process.env.EMAIL_HOST && process.env.EMAIL_USER && process.env.EMAIL_PASS) {
+  emailTransporter = nodemailer.createTransport({
+    host: process.env.EMAIL_HOST || "smtp.gmail.com",
+    port: Number(process.env.EMAIL_PORT) || 587,
+    secure: process.env.EMAIL_SECURE === "true",
+    family: 4,
+    auth: {
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_PASS
+    },
+    tls: {
+      rejectUnauthorized: false
+    }
+  })
+}
 
 // In-memory last email error for quick debug (not persisted)
 let lastEmailError = null
@@ -61,11 +80,21 @@ if (useResend) {
 }
 
 console.log(
-  `ℹ️ [EMAIL] Config: Resend=${useResend ? "on" : "off"}, EMAIL_FROM=${process.env.EMAIL_FROM ? "set" : "missing"}`
+  `ℹ️ [EMAIL] Config: Resend=${useResend ? "on" : "off"}, SMTP=${emailTransporter ? "on" : "off"}, EMAIL_FROM=${process.env.EMAIL_FROM ? "set" : "missing"}`
 )
 
 if (!useResend) {
   console.warn(`⚠️ [EMAIL] RESEND_API_KEY is missing; verification emails will fail until it is configured.`)
+}
+
+if (emailTransporter) {
+  emailTransporter.verify((error) => {
+    if (error) {
+      console.error(`❌ [EMAIL] SMTP connection failed:`, error?.message || error)
+    } else {
+      console.log(`✅ [EMAIL] SMTP connection verified successfully`)
+    }
+  })
 }
 
 const VERIFICATION_TOKEN_EXPIRY_MS = 24 * 60 * 60 * 1000 // 24 години
@@ -98,46 +127,81 @@ const sendVerificationEmail = async (to, token) => {
     </div>
   `
 
-  try {
-    if (!useResend) {
-      throw new Error("RESEND_API_KEY is not configured")
-    }
+  let resendError = null
 
-    const result = await resend.emails.send({
-      from,
-      to,
-      subject: "Підтвердіть вашу електронну пошту — Habit Tracker",
-      html: emailHtml
-    })
-    if (result.error) {
-      throw new Error(result.error.message || JSON.stringify(result.error))
+  if (useResend) {
+    try {
+      const result = await resend.emails.send({
+        from,
+        to,
+        subject: "Підтвердіть вашу електронну пошту — Habit Tracker",
+        html: emailHtml
+      })
+      if (result.error) {
+        throw new Error(result.error.message || JSON.stringify(result.error))
+      }
+      const messageId = result.id || result.messageId
+      console.log(`✅ [EMAIL][Resend] Verification email sent successfully to ${to}, ID: ${messageId}`)
+      return result
+    } catch (error) {
+      resendError = error
+      console.error(`❌ [EMAIL][Resend] Failed for ${to}:`, error?.message || error)
     }
-    const messageId = result.id || result.messageId
-    console.log(`✅ [EMAIL][Resend] Verification email sent successfully to ${to}, ID: ${messageId}`)
-    return result
-  } catch (error) {
-    const isResendTestModeError = useResend && /only send testing emails/i.test(error?.message || "")
-
-    const actionableHint = isResendTestModeError
-      ? "Resend is in test mode. Verify a domain at resend.com/domains and set EMAIL_FROM to an address on that domain, or keep sending only to the verified test recipient."
-      : null
-
-    console.error(`❌ [EMAIL] Failed to send verification email to ${to}:`, error?.message || error)
-    if (actionableHint) {
-      console.error(`   Hint: ${actionableHint}`)
-    }
-    console.error(`   Error code: ${error?.code}, Response: ${error?.response}`)
-    lastEmailError = {
-      to,
-      message: error?.message || String(error),
-      stack: error?.stack || null,
-      code: error?.code || null,
-      response: error?.response || null,
-      hint: actionableHint,
-      timestamp: new Date().toISOString()
-    }
-    throw error
   }
+
+  if (emailTransporter && useSmtpFallback) {
+    try {
+      console.warn(`🔁 [EMAIL] Falling back to SMTP for ${to}`)
+      const smtpResult = await emailTransporter.sendMail({
+        from,
+        to,
+        subject: "Підтвердіть вашу електронну пошту — Habit Tracker",
+        html: emailHtml
+      })
+      const smtpMessageId = smtpResult?.messageId || smtpResult?.id
+      console.log(`✅ [EMAIL][SMTP] Verification email sent successfully to ${to}, ID: ${smtpMessageId}`)
+      return smtpResult
+    } catch (smtpError) {
+      const actionableHint = resendError && /only send testing emails/i.test(resendError?.message || "")
+        ? "Resend is in test mode. Verify a domain at resend.com/domains and set EMAIL_FROM to an address on that domain, or keep sending only to the verified test recipient."
+        : null
+
+      console.error(`❌ [EMAIL][SMTP] Failed for ${to}:`, smtpError?.message || smtpError)
+      if (actionableHint) {
+        console.error(`   Hint: ${actionableHint}`)
+      }
+      lastEmailError = {
+        to,
+        message: smtpError?.message || String(smtpError),
+        stack: smtpError?.stack || null,
+        code: smtpError?.code || null,
+        response: smtpError?.response || null,
+        hint: actionableHint,
+        timestamp: new Date().toISOString()
+      }
+      throw smtpError
+    }
+  }
+
+  const terminalError = resendError || new Error("No email transport configured")
+  const actionableHint = /only send testing emails/i.test(terminalError?.message || "")
+    ? "Resend is in test mode. Verify a domain at resend.com/domains and set EMAIL_FROM to an address on that domain, or keep sending only to the verified test recipient."
+    : null
+
+  console.error(`❌ [EMAIL] Failed to send verification email to ${to}:`, terminalError?.message || terminalError)
+  if (actionableHint) {
+    console.error(`   Hint: ${actionableHint}`)
+  }
+  lastEmailError = {
+    to,
+    message: terminalError?.message || String(terminalError),
+    stack: terminalError?.stack || null,
+    code: terminalError?.code || null,
+    response: terminalError?.response || null,
+    hint: actionableHint,
+    timestamp: new Date().toISOString()
+  }
+  throw terminalError
 }
 
 const isValidObjectId = (value) => mongoose.Types.ObjectId.isValid(value)
