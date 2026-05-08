@@ -61,6 +61,9 @@ const buildSmtpTransport = (portOverride) => nodemailer.createTransport({
     ? process.env.EMAIL_SECURE === "true"
     : Number(portOverride ?? process.env.EMAIL_PORT) === 465,
   family: 4,
+  connectionTimeout: Number(process.env.EMAIL_CONNECTION_TIMEOUT_MS) || 10000,
+  greetingTimeout: Number(process.env.EMAIL_GREETING_TIMEOUT_MS) || 10000,
+  socketTimeout: Number(process.env.EMAIL_SOCKET_TIMEOUT_MS) || 10000,
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS
