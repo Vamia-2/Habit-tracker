@@ -26,9 +26,9 @@ const __dirname = path.dirname(__filename)
 dotenv.config({ path: path.join(__dirname, "../.env") })
 
 const app = express()
-// When behind a proxy (Render, Heroku, etc.) enable trust proxy so
-// express-rate-limit and other middleware can correctly read X-Forwarded-* headers.
-app.set('trust proxy', true)
+// When behind a single proxy (Render, Heroku, etc.), trust exactly one hop.
+// This satisfies express-rate-limit without making IP-based limiting permissive.
+app.set('trust proxy', 1)
 
 
 // ✅ Auth rate limiters
