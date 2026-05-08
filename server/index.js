@@ -757,7 +757,10 @@ app.post("/api/resend-verification", authRateLimit, async(req,res)=>{
     }
 
     const pendingRegistration = await PendingRegistration.findOne({ email: normalizedEmail })
-    const user = pendingRegistration ? null : await User.findOne({ email: normalizedEmail })
+    let user = null
+    if (!pendingRegistration) {
+      user = await User.findOne({ email: normalizedEmail })
+    }
 
     if (!pendingRegistration && !user) {
       return res.status(404).json("Користувач не знайдений")
