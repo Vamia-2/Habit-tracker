@@ -61,7 +61,7 @@ if (useResend) {
 }
 
 console.log(
-  `ℹ️ [EMAIL] Config: Resend=${useResend ? "on" : "off"}, EMAIL_FROM=${process.env.EMAIL_FROM ? "set" : "missing"}, RESEND_TEST_RECIPIENT=${process.env.RESEND_TEST_RECIPIENT ? "set" : "missing"}`
+  `ℹ️ [EMAIL] Config: Resend=${useResend ? "on" : "off"}, EMAIL_FROM=${process.env.EMAIL_FROM ? "set" : "missing"}`
 )
 
 if (!useResend) {
@@ -80,9 +80,6 @@ const sendVerificationEmail = async (to, token) => {
   const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173"
   const verifyUrl = `${frontendUrl}/verify-email?token=${token}`
   const from = process.env.EMAIL_FROM || process.env.EMAIL_USER || "noreply@habit-tracker.com"
-  const configuredResendTestRecipient = typeof process.env.RESEND_TEST_RECIPIENT === "string"
-    ? process.env.RESEND_TEST_RECIPIENT.trim().toLowerCase()
-    : ""
 
   console.log(`📧 [EMAIL] Sending verification email to: ${to}`)
   console.log(`📧 [EMAIL] Method: Resend API`)
@@ -120,44 +117,6 @@ const sendVerificationEmail = async (to, token) => {
     return result
   } catch (error) {
     const isResendTestModeError = useResend && /only send testing emails/i.test(error?.message || "")
-    const testRecipientFromError = isResendTestModeError
-      ? ((error?.message || "").match(/own email address \(([^)]+)\)/i)?.[1] || "").trim().toLowerCase()
-      : ""
-    const resendTestRecipient = configuredResendTestRecipient || testRecipientFromError
-
-    if (isResendTestModeError && resendTestRecipient && resendTestRecipient !== String(to).trim().toLowerCase()) {
-      const relayHtml = `
-        <div style="font-family: 'Segoe UI', sans-serif; max-width: 640px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 10px;">
-          <h3 style="margin: 0 0 12px;">Resend Test Mode Relay</h3>
-          <p style="margin: 0 0 8px;">Оригінальний отримувач: <b>${to}</b></p>
-          <p style="margin: 0 0 8px;">Скопіюйте й перешліть це посилання користувачу для підтвердження:</p>
-          <p style="word-break: break-all;"><a href="${verifyUrl}">${verifyUrl}</a></p>
-        </div>
-      `
-
-      try {
-        const relayResult = await resend.emails.send({
-          from,
-          to: resendTestRecipient,
-          subject: `Relay verification link for ${to}`,
-          html: relayHtml
-        })
-        if (relayResult.error) {
-          throw new Error(relayResult.error.message || JSON.stringify(relayResult.error))
-        }
-
-        const relayMessageId = relayResult.id || relayResult.messageId
-        console.log(`✅ [EMAIL][Resend] Test-mode relay sent to ${resendTestRecipient} for recipient ${to}, ID: ${relayMessageId}`)
-        return {
-          relayed: true,
-          relayedTo: resendTestRecipient,
-          originalTo: to,
-          id: relayMessageId
-        }
-      } catch (relayError) {
-        console.error(`❌ [EMAIL][Resend] Relay failed to ${resendTestRecipient}:`, relayError?.message || relayError)
-      }
-    }
 
     const actionableHint = isResendTestModeError
       ? "Resend is in test mode. Verify a domain at resend.com/domains and set EMAIL_FROM to an address on that domain, or keep sending only to the verified test recipient."
@@ -554,24 +513,32 @@ app.post("/api/register", authRateLimit, async(req,res)=>{
     const { token: verificationToken, expires: verificationExpires } = generateVerificationToken()
 
     const hashedPassword = await bcrypt.hash(password, 10)
-    await PendingRegistration.create({
+    const pendingRegistration = await PendingRegistration.create({
       email: normalizedEmail,
       password: hashedPassword,
       username: username.trim(),
       emailVerificationToken: verificationToken,
       emailVerificationExpires: verificationExpires
     })
-    res.json({
-      message: "Реєстрацію успішно завершено. Перевірте вашу електронну пошту для підтвердження акаунта.",
-      email: normalizedEmail
-    })
-
     console.log(`✅ [REGISTER] Pending registration created for ${normalizedEmail}, token: ${verificationToken.substring(0, 16)}...`)
-    sendVerificationEmail(normalizedEmail, verificationToken)
-      .then(() => console.log(`✅ [EMAIL] Verification email sent to ${normalizedEmail}`))
-      .catch((emailErr) => {
-        console.error(`❌ [EMAIL] Failed to send verification email to ${normalizedEmail}:`, emailErr?.message || emailErr)
+    try {
+      await sendVerificationEmail(normalizedEmail, verificationToken)
+      console.log(`✅ [EMAIL] Verification email sent to ${normalizedEmail}`)
+      return res.json({
+        message: "Реєстрацію успішно завершено. Перевірте вашу електронну пошту для підтвердження акаунта.",
+        email: normalizedEmail
       })
+    } catch (emailErr) {
+      console.error(`❌ [REGISTER] Email delivery failed for ${normalizedEmail}:`, emailErr?.message || emailErr)
+      await PendingRegistration.deleteOne({ _id: pendingRegistration._id })
+      if (/only send testing emails/i.test(emailErr?.message || "")) {
+        return res.status(502).json({
+          message: "Сервіс пошти працює в test mode. Завершіть налаштування домену в Resend і спробуйте ще раз.",
+          code: "RESEND_TEST_MODE"
+        })
+      }
+      return res.status(502).json("Не вдалося надіслати лист підтвердження. Спробуйте пізніше")
+    }
   } catch(e) {
     console.error("Registration error:", e)
 
