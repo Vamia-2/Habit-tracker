@@ -9,7 +9,6 @@ import { fileURLToPath } from "url"
 import dotenv from "dotenv"
 import bcrypt from "bcryptjs"
 import crypto from "crypto"
-import nodemailer from "nodemailer"
 import rateLimit from "express-rate-limit"
 import { Resend } from "resend"
 
@@ -49,27 +48,9 @@ const verifyEmailRateLimit = rateLimit({
   message: "Забагато запитів. Спробуйте через 15 хвилин."
 })
 
-// ✅ Email service (Resend HTTP API) + optional SMTP transporter for fallback
+// ✅ Email service (Resend HTTP API)
 const useResend = !!process.env.RESEND_API_KEY
 const resend = useResend ? new Resend(process.env.RESEND_API_KEY) : null
-const allowSmtpFallback = process.env.EMAIL_ALLOW_SMTP_FALLBACK === "true"
-
-let emailTransporter = null
-// Create SMTP transporter only when fallback is explicitly enabled.
-if (allowSmtpFallback && process.env.EMAIL_HOST && process.env.EMAIL_USER && process.env.EMAIL_PASS) {
-  emailTransporter = nodemailer.createTransport({
-    host: process.env.EMAIL_HOST || "smtp.gmail.com",
-    port: Number(process.env.EMAIL_PORT) || 587,
-    secure: process.env.EMAIL_SECURE === "true",
-    auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS
-    },
-    tls: {
-      rejectUnauthorized: false
-    }
-  })
-}
 
 // In-memory last email error for quick debug (not persisted)
 let lastEmailError = null
@@ -80,20 +61,11 @@ if (useResend) {
 }
 
 console.log(
-  `ℹ️ [EMAIL] Config: Resend=${useResend ? "on" : "off"}, SMTP fallback=${allowSmtpFallback ? "on" : "off"}, EMAIL_FROM=${process.env.EMAIL_FROM ? "set" : "missing"}`
+  `ℹ️ [EMAIL] Config: Resend=${useResend ? "on" : "off"}, EMAIL_FROM=${process.env.EMAIL_FROM ? "set" : "missing"}`
 )
 
-if (emailTransporter) {
-  emailTransporter.verify((error, success) => {
-    if (error) {
-      console.error(`❌ [EMAIL] SMTP connection failed:`, error?.message || error)
-      console.error(`   Check: EMAIL_HOST="${process.env.EMAIL_HOST}", EMAIL_PORT="${process.env.EMAIL_PORT}", EMAIL_USER="${process.env.EMAIL_USER}"`)
-    } else {
-      console.log(`✅ [EMAIL] SMTP connection verified successfully`)
-    }
-  })
-} else {
-  console.log(`ℹ️ [EMAIL] SMTP fallback disabled or not configured`)
+if (!useResend) {
+  console.warn(`⚠️ [EMAIL] RESEND_API_KEY is missing; verification emails will fail until it is configured.`)
 }
 
 const VERIFICATION_TOKEN_EXPIRY_MS = 24 * 60 * 60 * 1000 // 24 години
@@ -127,49 +99,22 @@ const sendVerificationEmail = async (to, token) => {
   `
 
   try {
-    let result
-    if (useResend) {
-      try {
-        result = await resend.emails.send({
-          from,
-          to,
-          subject: "Підтвердіть вашу електронну пошту — Habit Tracker",
-          html: emailHtml
-        })
-        if (result.error) {
-          throw new Error(result.error.message || JSON.stringify(result.error))
-        }
-        const messageId = result.id || result.messageId
-        console.log(`✅ [EMAIL][Resend] Verification email sent successfully to ${to}, ID: ${messageId}`)
-        return result
-      } catch (resendErr) {
-        console.error(`❌ [EMAIL][Resend] Failed to send via Resend API:`, resendErr?.message || resendErr)
-        // Fallback is opt-in only because SMTP is currently unreliable on Render.
-        if (allowSmtpFallback && emailTransporter) {
-          console.log(`🔁 [EMAIL] Falling back to SMTP transport for ${to}`)
-          result = await emailTransporter.sendMail({
-            from,
-            to,
-            subject: "Підтвердіть вашу електронну пошту — Habit Tracker",
-            html: emailHtml
-          })
-          const messageId = result.id || result.messageId
-          console.log(`✅ [EMAIL][SMTP] Verification email sent successfully to ${to}, ID: ${messageId}`)
-          return result
-        }
-        throw resendErr
-      }
-    } else {
-      result = await emailTransporter.sendMail({
-        from,
-        to,
-        subject: "Підтвердіть вашу електронну пошту — Habit Tracker",
-        html: emailHtml
-      })
-      const messageId = result.id || result.messageId
-      console.log(`✅ [EMAIL][SMTP] Verification email sent successfully to ${to}, ID: ${messageId}`)
-      return result
+    if (!useResend) {
+      throw new Error("RESEND_API_KEY is not configured")
     }
+
+    const result = await resend.emails.send({
+      from,
+      to,
+      subject: "Підтвердіть вашу електронну пошту — Habit Tracker",
+      html: emailHtml
+    })
+    if (result.error) {
+      throw new Error(result.error.message || JSON.stringify(result.error))
+    }
+    const messageId = result.id || result.messageId
+    console.log(`✅ [EMAIL][Resend] Verification email sent successfully to ${to}, ID: ${messageId}`)
+    return result
   } catch (error) {
     const actionableHint = useResend && /only send testing emails/i.test(error?.message || "")
       ? "Resend is in test mode. Verify a domain at resend.com/domains and set EMAIL_FROM to an address on that domain, or keep sending only to the verified test recipient."
@@ -848,12 +793,12 @@ app.post("/api/debug/send-test-email", async(req, res) => {
   
   try {
     console.log(`🧪 [DEBUG] Sending test email to: ${email}`)
-    if (!useResend && !emailTransporter) {
-      console.warn('⚠️ [DEBUG] No email transport configured (Resend API key or SMTP env vars missing)')
-      return res.status(501).json({ success: false, error: 'No email transport configured. Set RESEND_API_KEY or SMTP env vars.' })
+    if (!useResend) {
+      console.warn('⚠️ [DEBUG] No email transport configured (RESEND_API_KEY missing)')
+      return res.status(501).json({ success: false, error: 'No email transport configured. Set RESEND_API_KEY.' })
     }
 
-    // Use the same sendVerificationEmail helper so Resend+SMTP fallback is exercised
+    // Use the same sendVerificationEmail helper so Resend delivery is exercised
     const { token } = generateVerificationToken()
     await sendVerificationEmail(email, token)
     res.json({ success: true, message: "Test email sent (via configured transport)" })
