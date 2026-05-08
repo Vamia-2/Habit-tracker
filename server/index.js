@@ -757,19 +757,27 @@ app.post("/api/resend-verification", authRateLimit, async(req,res)=>{
     }
 
     const pendingRegistration = await PendingRegistration.findOne({ email: normalizedEmail })
+    const user = await User.findOne({ email: normalizedEmail })
 
-    if (!pendingRegistration) {
-      const user = await User.findOne({ email: normalizedEmail })
-      if (user?.isVerified) {
-        return res.status(400).json("Цей акаунт вже підтверджено")
-      }
+    if (!pendingRegistration && !user) {
       return res.status(404).json("Користувач не знайдений")
     }
 
+    if (user?.isVerified) {
+      return res.status(400).json("Цей акаунт вже підтверджено")
+    }
+
     const { token: verificationToken, expires: verificationExpires } = generateVerificationToken()
-    pendingRegistration.emailVerificationToken = verificationToken
-    pendingRegistration.emailVerificationExpires = verificationExpires
-    await pendingRegistration.save()
+
+    if (pendingRegistration) {
+      pendingRegistration.emailVerificationToken = verificationToken
+      pendingRegistration.emailVerificationExpires = verificationExpires
+      await pendingRegistration.save()
+    } else {
+      user.emailVerificationToken = verificationToken
+      user.emailVerificationExpires = verificationExpires
+      await user.save()
+    }
 
     console.log(`🔄 [RESEND] Regenerated token for ${normalizedEmail}: ${verificationToken.substring(0, 16)}...`)
 
