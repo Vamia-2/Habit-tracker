@@ -27,6 +27,10 @@ const __dirname = path.dirname(__filename)
 dotenv.config({ path: path.join(__dirname, "../.env") })
 
 const app = express()
+// When behind a proxy (Render, Heroku, etc.) enable trust proxy so
+// express-rate-limit and other middleware can correctly read X-Forwarded-* headers.
+app.set('trust proxy', true)
+
 
 // ✅ Auth rate limiters
 const authRateLimit = rateLimit({
@@ -48,10 +52,11 @@ const verifyEmailRateLimit = rateLimit({
 // ✅ Email service (Resend HTTP API) + optional SMTP transporter for fallback
 const useResend = !!process.env.RESEND_API_KEY
 const resend = useResend ? new Resend(process.env.RESEND_API_KEY) : null
+const allowSmtpFallback = process.env.EMAIL_ALLOW_SMTP_FALLBACK === "true"
 
 let emailTransporter = null
-// Create SMTP transporter if SMTP env vars are provided (allow fallback even when using Resend)
-if (process.env.EMAIL_HOST && process.env.EMAIL_USER && process.env.EMAIL_PASS) {
+// Create SMTP transporter only when fallback is explicitly enabled.
+if (allowSmtpFallback && process.env.EMAIL_HOST && process.env.EMAIL_USER && process.env.EMAIL_PASS) {
   emailTransporter = nodemailer.createTransport({
     host: process.env.EMAIL_HOST || "smtp.gmail.com",
     port: Number(process.env.EMAIL_PORT) || 587,
@@ -74,6 +79,10 @@ if (useResend) {
   console.log(`✅ [EMAIL] Using Resend API for email delivery`)
 }
 
+console.log(
+  `ℹ️ [EMAIL] Config: Resend=${useResend ? "on" : "off"}, SMTP fallback=${allowSmtpFallback ? "on" : "off"}, EMAIL_FROM=${process.env.EMAIL_FROM ? "set" : "missing"}`
+)
+
 if (emailTransporter) {
   emailTransporter.verify((error, success) => {
     if (error) {
@@ -84,7 +93,7 @@ if (emailTransporter) {
     }
   })
 } else {
-  console.log(`ℹ️ [EMAIL] No SMTP transporter configured (EMAIL_HOST/EMAIL_USER/EMAIL_PASS missing)`)
+  console.log(`ℹ️ [EMAIL] SMTP fallback disabled or not configured`)
 }
 
 const VERIFICATION_TOKEN_EXPIRY_MS = 24 * 60 * 60 * 1000 // 24 години
@@ -135,8 +144,8 @@ const sendVerificationEmail = async (to, token) => {
         return result
       } catch (resendErr) {
         console.error(`❌ [EMAIL][Resend] Failed to send via Resend API:`, resendErr?.message || resendErr)
-        // fallback to SMTP if configured
-        if (emailTransporter) {
+        // Fallback is opt-in only because SMTP is currently unreliable on Render.
+        if (allowSmtpFallback && emailTransporter) {
           console.log(`🔁 [EMAIL] Falling back to SMTP transport for ${to}`)
           result = await emailTransporter.sendMail({
             from,
@@ -162,7 +171,14 @@ const sendVerificationEmail = async (to, token) => {
       return result
     }
   } catch (error) {
+    const actionableHint = useResend && /only send testing emails/i.test(error?.message || "")
+      ? "Resend is in test mode. Verify a domain at resend.com/domains and set EMAIL_FROM to an address on that domain, or keep sending only to the verified test recipient."
+      : null
+
     console.error(`❌ [EMAIL] Failed to send verification email to ${to}:`, error?.message || error)
+    if (actionableHint) {
+      console.error(`   Hint: ${actionableHint}`)
+    }
     console.error(`   Error code: ${error?.code}, Response: ${error?.response}`)
     lastEmailError = {
       to,
@@ -170,6 +186,7 @@ const sendVerificationEmail = async (to, token) => {
       stack: error?.stack || null,
       code: error?.code || null,
       response: error?.response || null,
+      hint: actionableHint,
       timestamp: new Date().toISOString()
     }
     throw error
@@ -795,6 +812,12 @@ app.post("/api/resend-verification", authRateLimit, async(req,res)=>{
       } catch (jsonErr) {
         // ignore stringify errors
       }
+      if (useResend && /only send testing emails/i.test(emailErr?.message || "")) {
+        return res.status(502).json({
+          message: "Resend is still in test mode. Verify a domain in Resend and set EMAIL_FROM to that domain, then try again.",
+          code: "RESEND_TEST_MODE"
+        })
+      }
       // store last email error for debugging
       lastEmailError = {
         to: normalizedEmail,
@@ -802,6 +825,9 @@ app.post("/api/resend-verification", authRateLimit, async(req,res)=>{
         stack: emailErr?.stack || null,
         code: emailErr?.code || null,
         response: emailErr?.response || null,
+        hint: useResend && /only send testing emails/i.test(emailErr?.message || "")
+          ? "Verify a Resend domain and update EMAIL_FROM."
+          : null,
         timestamp: new Date().toISOString()
       }
       return res.status(500).json({ message: "Не вдалося надіслати лист підтвердження. Спробуйте пізніше." })
