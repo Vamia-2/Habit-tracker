@@ -638,12 +638,12 @@ app.post("/api/register", authRateLimit, async(req,res)=>{
       email: normalizedEmail,
       password: hashedPassword,
       username: username.trim(),
-      emailVerificationToken: null,
-      emailVerificationExpires: null
+      emailVerificationToken: verificationToken,
+      emailVerificationExpires: verificationExpires
     })
     console.log(`✅ [REGISTER] Pending registration created for ${normalizedEmail}, token: ${verificationToken.substring(0, 16)}...`)
     try {
-    // await sendVerificationEmail(normalizedEmail, verificationToken)
+      await sendVerificationEmail(normalizedEmail, verificationToken)
       console.log(`✅ [EMAIL] Verification email sent to ${normalizedEmail}`)
       return res.json({
         message: "Реєстрацію успішно завершено. Перевірте вашу електронну пошту для підтвердження акаунта.",
