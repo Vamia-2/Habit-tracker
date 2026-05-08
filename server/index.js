@@ -54,21 +54,25 @@ const useResend = !!process.env.RESEND_API_KEY
 const resend = useResend ? new Resend(process.env.RESEND_API_KEY) : null
 const useSmtpFallback = process.env.EMAIL_SMTP_FALLBACK !== "false"
 
+const buildSmtpTransport = (portOverride) => nodemailer.createTransport({
+  host: process.env.EMAIL_HOST || "smtp.gmail.com",
+  port: Number(portOverride ?? process.env.EMAIL_PORT) || 587,
+  secure: typeof process.env.EMAIL_SECURE === "string"
+    ? process.env.EMAIL_SECURE === "true"
+    : Number(portOverride ?? process.env.EMAIL_PORT) === 465,
+  family: 4,
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS
+  },
+  tls: {
+    rejectUnauthorized: false
+  }
+})
+
 let emailTransporter = null
 if (process.env.EMAIL_HOST && process.env.EMAIL_USER && process.env.EMAIL_PASS) {
-  emailTransporter = nodemailer.createTransport({
-    host: process.env.EMAIL_HOST || "smtp.gmail.com",
-    port: Number(process.env.EMAIL_PORT) || 587,
-    secure: process.env.EMAIL_SECURE === "true",
-    family: 4,
-    auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS
-    },
-    tls: {
-      rejectUnauthorized: false
-    }
-  })
+  emailTransporter = buildSmtpTransport()
 }
 
 // In-memory last email error for quick debug (not persisted)
@@ -91,6 +95,21 @@ if (emailTransporter) {
   emailTransporter.verify((error) => {
     if (error) {
       console.error(`❌ [EMAIL] SMTP connection failed:`, error?.message || error)
+      if (/ENETUNREACH|ETIMEDOUT|ECONNREFUSED|ESOCKET/i.test(error?.code || error?.message || "")) {
+        try {
+          const fallbackTransport = buildSmtpTransport(587)
+          fallbackTransport.verify((fallbackError) => {
+            if (fallbackError) {
+              console.error(`❌ [EMAIL] SMTP 587 fallback failed:`, fallbackError?.message || fallbackError)
+            } else {
+              console.log(`✅ [EMAIL] SMTP 587 fallback verified successfully`)
+              emailTransporter = fallbackTransport
+            }
+          })
+        } catch (fallbackBuildError) {
+          console.error(`❌ [EMAIL] Could not build SMTP 587 fallback:`, fallbackBuildError?.message || fallbackBuildError)
+        }
+      }
     } else {
       console.log(`✅ [EMAIL] SMTP connection verified successfully`)
     }
@@ -167,6 +186,23 @@ const sendVerificationEmail = async (to, token) => {
         : null
 
       console.error(`❌ [EMAIL][SMTP] Failed for ${to}:`, smtpError?.message || smtpError)
+      if (/ENETUNREACH|ETIMEDOUT|ECONNREFUSED|ESOCKET/i.test(smtpError?.code || smtpError?.message || "") && process.env.EMAIL_PORT === "465") {
+        try {
+          const fallbackTransport = buildSmtpTransport(587)
+          const smtpResult = await fallbackTransport.sendMail({
+            from,
+            to,
+            subject: "Підтвердіть вашу електронну пошту — Habit Tracker",
+            html: emailHtml
+          })
+          const smtpMessageId = smtpResult?.messageId || smtpResult?.id
+          emailTransporter = fallbackTransport
+          console.log(`✅ [EMAIL][SMTP] 587 fallback sent successfully to ${to}, ID: ${smtpMessageId}`)
+          return smtpResult
+        } catch (fallbackSendError) {
+          console.error(`❌ [EMAIL][SMTP] 587 fallback failed for ${to}:`, fallbackSendError?.message || fallbackSendError)
+        }
+      }
       if (actionableHint) {
         console.error(`   Hint: ${actionableHint}`)
       }
