@@ -5,12 +5,15 @@
   "scripts": {
     "build": "cd client && npm install && npm run build",
     "start": "node server/index.js",
-    "generate-vapid": "node server/generate-vapid.js"
+    "generate-vapid": "node server/generate-vapid.js",
+    "generate:pptx": "node scripts/generate_pptx.js"
   },
   "dependencies": {
     "@react-oauth/google": "^0.13.4",
     "chart.js": "^4.5.1",
     "cors": "^2.8.6",
+    "nodemailer": "^8.0.7",
+    "pptxgenjs": "^4.0.1",
     "react-chartjs-2": "^5.3.1",
     "react-router-dom": "^7.13.1",
     "resend": "^6.12.3",
